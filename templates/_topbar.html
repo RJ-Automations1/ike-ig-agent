@@ -3,6 +3,10 @@
   <div class="wordmark">Iroko Lifesciences Advisory
     <small>Content dashboard</small>
   </div>
+  <nav class="topbar-nav">
+    <a class="{{ 'active' if active_page == 'dashboard' }}" href="{{ url_for('dashboard') }}">Today</a>
+    <a class="{{ 'active' if active_page == 'archive' }}" href="{{ url_for('archive') }}">Archive</a>
+  </nav>
   <div class="topbar-right">
     {% if today %}<span class="meta today">{{ today }}</span>{% endif %}
     <a class="btn btn-ghost" href="{{ url_for('logout') }}">Log out</a>

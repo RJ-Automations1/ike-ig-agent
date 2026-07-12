@@ -1,8 +1,9 @@
-"""Per-post analytics from Instagram and Facebook (background only).
+"""Per-post analytics from Instagram.
 
-Fetched metrics feed the performance-steering loop: top-scoring posts are
-injected into future generation prompts. There is no analytics UI.
-- Instagram + Facebook: fetched live from the Graph API.
+Fetched metrics feed the performance-steering loop (top-scoring posts are
+injected into future generation prompts) and are shown per post in the
+Archive tab.
+- Instagram: fetched live from the Graph API.
 - LinkedIn: the API exposes no post analytics for personal profiles, so
   LinkedIn publications carry no metrics.
 - USE_MOCK_PUBLISHER=true: deterministic mock numbers so the learning loop
@@ -80,39 +81,6 @@ def _instagram_metrics(pub) -> dict | None:
     return metrics or None
 
 
-def _facebook_metrics(pub) -> dict | None:
-    if not (config.FB_PAGE_ACCESS_TOKEN and pub.external_id):
-        return None
-    resp = requests.get(
-        f"{config.GRAPH_API_BASE}/{pub.external_id}",
-        params={
-            "fields": "likes.summary(true),comments.summary(true),shares",
-            "access_token": config.FB_PAGE_ACCESS_TOKEN,
-        },
-        timeout=30,
-    )
-    if resp.status_code != 200:
-        log.warning("FB post fields failed (%s): %s", resp.status_code, resp.text)
-        return None
-    data = resp.json()
-    metrics = {
-        "likes": ((data.get("likes") or {}).get("summary") or {}).get("total_count"),
-        "comments": ((data.get("comments") or {}).get("summary") or {}).get("total_count"),
-        "shares": (data.get("shares") or {}).get("count", 0),
-    }
-    resp = requests.get(
-        f"{config.GRAPH_API_BASE}/{pub.external_id}/insights",
-        params={"metric": "post_impressions_unique",
-                "access_token": config.FB_PAGE_ACCESS_TOKEN},
-        timeout=30,
-    )
-    if resp.status_code == 200:
-        for item in resp.json().get("data", []):
-            values = item.get("values") or [{}]
-            metrics["impressions"] = values[0].get("value")
-    return metrics
-
-
 def refresh_publication(session, pub) -> bool:
     """Fetch fresh metrics for one publication. Returns True if updated."""
     if pub.status != "published":
@@ -121,8 +89,6 @@ def refresh_publication(session, pub) -> bool:
         metrics = _mock_metrics(pub)
     elif pub.platform == "instagram":
         metrics = _instagram_metrics(pub)
-    elif pub.platform == "facebook":
-        metrics = _facebook_metrics(pub)
     else:
         return False  # linkedin: manual entry only (no personal-profile API)
 

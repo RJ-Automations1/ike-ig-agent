@@ -1,6 +1,6 @@
 """Publisher interface: one publisher per platform, plus a mock for dev.
 
-get_publisher("instagram" | "facebook" | "linkedin") returns the right one;
+get_publisher("instagram" | "linkedin") returns the right one;
 USE_MOCK_PUBLISHER=true swaps in a mock for every platform.
 """
 import logging
@@ -14,8 +14,8 @@ from models import IgCredentials
 
 log = logging.getLogger(__name__)
 
-PLATFORMS = ("instagram", "facebook", "linkedin")
-PLATFORM_LABELS = {"instagram": "Instagram", "facebook": "Facebook", "linkedin": "LinkedIn"}
+PLATFORMS = ("instagram", "linkedin")
+PLATFORM_LABELS = {"instagram": "Instagram", "linkedin": "LinkedIn"}
 
 
 def full_caption(post) -> str:
@@ -79,30 +79,6 @@ class InstagramPublisher(Publisher):
         if resp.status_code != 200:
             raise RuntimeError(f"IG media publish failed ({resp.status_code}): {resp.text}")
         return resp.json()["id"]
-
-
-class FacebookPublisher(Publisher):
-    """Publish the image as a Facebook Page photo post."""
-
-    platform = "facebook"
-
-    def publish(self, post) -> str:
-        if not (config.FB_PAGE_ID and config.FB_PAGE_ACCESS_TOKEN):
-            raise RuntimeError("FB_PAGE_ID / FB_PAGE_ACCESS_TOKEN are not set")
-
-        resp = requests.post(
-            f"{config.GRAPH_API_BASE}/{config.FB_PAGE_ID}/photos",
-            data={
-                "url": post.image_url,
-                "caption": full_caption(post),
-                "access_token": config.FB_PAGE_ACCESS_TOKEN,
-            },
-            timeout=60,
-        )
-        if resp.status_code != 200:
-            raise RuntimeError(f"FB photo publish failed ({resp.status_code}): {resp.text}")
-        data = resp.json()
-        return data.get("post_id") or data["id"]
 
 
 # LinkedIn's Posts API requires these characters to be escaped in commentary text
@@ -192,7 +168,6 @@ class LinkedInPublisher(Publisher):
 
 _REAL_PUBLISHERS = {
     "instagram": InstagramPublisher,
-    "facebook": FacebookPublisher,
     "linkedin": LinkedInPublisher,
 }
 

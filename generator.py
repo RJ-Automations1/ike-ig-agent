@@ -1,11 +1,13 @@
 """Claude call -> {caption, hashtags, image_text}.
 
-Each daily batch has one post per category. The "medical" category gets web
-search so it can react to actual current developments; the other two are
-drawn from Dr. Ike's experience and don't need it.
+Each daily batch has six posts: three for Instagram (short, casual,
+quote-forward) and three for LinkedIn (his long-form professional voice).
+The LinkedIn "article" category gets web search so it can react to a real
+current article; everything else is drawn from Dr. Ike's experience.
 """
 import json
 import logging
+import re
 
 import anthropic
 
@@ -13,81 +15,158 @@ import config
 
 log = logging.getLogger(__name__)
 
-# Ordered: one dashboard option per category, in this order.
+# Ordered: one dashboard option per category. Keys are stored on posts, so
+# renaming a key orphans old rows — add new keys instead.
 CATEGORIES = {
-    "medical": {
-        "label": "Medical space",
+    # ---- Instagram: short, casual, quote-on-the-card ----
+    "ig_career": {
+        "platform": "instagram",
+        "label": "Career Motivation",
         "brief": (
-            "a current update in the medical/biopharma space that Dr. Ike is well"
-            " placed to comment on — a data readout, congress signal, deal, or"
-            " policy shift in his areas (obesity/cardiometabolic, nephrology, rare"
-            " disease, immunology, AI in pharma, trial diversity/access). Use web"
-            " search to find one genuinely recent, credible development (major"
-            " journal, regulator, congress, or reputable industry press), then"
-            " write HIS analytical take: exact numbers with caveats, and what it"
-            " means for strategy — 'turn signal into strategy', not news"
-            " reporting. Do not invent findings; if search yields nothing solid,"
-            " write a grounded perspective piece on a live industry question."
-        ),
-        "web_search": True,
-    },
-    "growth": {
-        "label": "Personal growth",
-        "brief": (
-            "personal growth — an honest, specific reflection on character,"
-            " discipline, humility, resilience, or self-awareness, drawn from his"
-            " lived experience as a physician and biopharma executive and echoing"
-            " the themes of his Triangle of Leadership. Grounded and warm, never"
-            " generic self-help."
+            "career motivation — a short, punchy encouragement about careers:"
+            " getting unstuck, being overlooked while less capable people move"
+            " up, competency vs. influence, betting on yourself. Draw on his"
+            " Triangle of Leadership ideas (competency attracts, influence"
+            " moves, leverage scales) without lecturing."
         ),
         "web_search": False,
     },
-    "career": {
-        "label": "Career motivation",
+    "ig_medspace": {
+        "platform": "instagram",
+        "label": "Medspace Motivation",
         "brief": (
-            "career motivation — practical, encouraging career insight for"
-            " professionals in medicine, science, or biopharma: leadership,"
-            " hiring and building teams (character over résumé), mentorship,"
-            " career pivots from clinic to industry, how leaders treat people"
-            " after they stop being useful. Speak from his 20+ years of"
-            " experience; concrete over platitudes."
+            "motivation about the medical space — an inspirational take on the"
+            " progress happening in medicine and life sciences: breakthroughs"
+            " becoming real for patients, how far treatment has come, why the"
+            " work matters. Uplifting and big-picture; no clinical claims, no"
+            " numbers that would need a citation, nothing that reads as"
+            " medical advice."
+        ),
+        "web_search": False,
+    },
+    "ig_motivation": {
+        "platform": "instagram",
+        "label": "Motivation",
+        "brief": (
+            "general motivation — discipline, resilience, self-belief, growth,"
+            " showing up on the hard days. Universal, warm, and quotable;"
+            " something anyone scrolling could screenshot and keep."
+        ),
+        "web_search": False,
+    },
+    # ---- LinkedIn: his long-form professional voice ----
+    "li_article": {
+        "platform": "linkedin",
+        "label": "Article Response",
+        "brief": (
+            "a response to one genuinely recent, credible article — search the"
+            " web and pick the single most compelling piece of the day from"
+            " EITHER leadership/career-development OR the biopharma/medical"
+            " space (major journal, regulator, congress, or reputable industry"
+            " or business press). Write HIS take in his own words: what the"
+            " article gets right or misses, what it means for the reader's"
+            " career or for industry strategy. Name the source naturally in"
+            " the caption and include the article's URL on its own line at the"
+            " end of the caption. Do not invent articles or findings; if"
+            " search yields nothing solid, write a grounded perspective piece"
+            " on a live industry question and skip the link."
+        ),
+        "web_search": True,
+    },
+    "li_career": {
+        "platform": "linkedin",
+        "label": "Career Motivation",
+        "brief": (
+            "career motivation in his own words — practical, encouraging"
+            " career insight for professionals in medicine, science, or"
+            " biopharma: why competency alone doesn't get you promoted,"
+            " influence and leverage, hiring character over resume, mentorship,"
+            " pivots from clinic to industry. Speak from his 17+ years in"
+            " pharma; concrete over platitudes, drawn from lived experience."
+        ),
+        "web_search": False,
+    },
+    "li_quote": {
+        "platform": "linkedin",
+        "label": "Motivational Quote",
+        "brief": (
+            "a motivational quote or short motivational paragraph in LinkedIn"
+            " format — open with the quote or the one-line idea (his own line,"
+            " or one of his book's lines), then unpack it in a few short"
+            " standalone lines with white space between them, and close with a"
+            " question that invites comments. Keep it under 120 words."
         ),
         "web_search": False,
     },
 }
 
+WHO_HE_IS = """WHO HE IS:
+- Physician and biopharma executive (17+ years in pharma, 20+ in medicine):
+  former CMO & Head of Medical Affairs; advisor to biopharma founders,
+  investors, and medical affairs leaders; $5B+ in exits. Fractional CEO/CMO
+  for preclinical-to-Phase-2 biotechs.
+- Author of "Dr. Ike's Triangle of Leadership: How to Attract, Move, and
+  Scale People" — "the little book with big ideas". The framework: Competency
+  attracts people. Influence moves people. Leverage scales people. Signature
+  line: "Leadership is not about authority. It's about the ability to
+  attract followers."
+- Signature framing: competency gets you into the room, but influence and
+  leverage move you forward; leadership is not about titles, it's about
+  creating enough value that people willingly choose to follow.
+- Therapeutic areas he actually covers: obesity/cardiometabolic (GLP-1s,
+  amylin, MASH), nephrology and kidney health, rare and specialty disease,
+  immunology, diabetes; plus AI in pharma and clinical-trial diversity."""
+
+HUMAN_RULES = """WRITE LIKE A HUMAN:
+- NEVER use em dashes (—), double hyphens (--), or a hyphen used as a pause.
+  Use a comma, a period, or a new line instead. This is a hard rule.
+- No corporate filler ("delve", "landscape", "game-changer", "in today's
+  fast-paced world"). Plain words, short sentences.
+- ALWAYS include 2 to 5 hashtags (they drive viewership): mix one or two
+  high-reach tags with niche tags specific to the post's topic. Hashtags go
+  in the hashtags field, not the caption."""
+
+VOICE_LINKEDIN = """VOICE FOR THIS LINKEDIN POST (from his real posts):
+- Hook first: open with the tension or the headline line, then unpack it.
+- LinkedIn format: short standalone lines separated by blank lines, not
+  dense paragraphs. A tight bullet list (using the character •) is welcome
+  when it fits. Close with a question that invites comments.
+- Data-precise and skeptical-but-fair when facts are involved: exact numbers
+  with caveats, "signal worth tracking, not yet a story to tell".
+- Measured, credible, warm. Never hypey or clickbait. Nothing that reads as
+  medical advice or an efficacy claim about a product.
+- Almost no emoji.
+
+MATCH HIS STYLE using these real posts of his as reference for length,
+structure, and tone:
+{samples}"""
+
+VOICE_INSTAGRAM = """VOICE FOR THIS INSTAGRAM POST:
+- You are writing for Instagram, not LinkedIn. The branded image card carries
+  the quote (the image_text field); the caption is the short, casual voice
+  under it.
+- Caption: 1 to 4 short lines, conversational and direct ("you"), warm and
+  human. One or two emojis are fine where they feel natural, never more.
+- Quotable over clever: image_text must be a short, punchy line (under 120
+  characters) that stands alone on a quote card. His own words or his book's
+  lines are perfect; never invent a quote attributed to someone else.
+- A soft call to action is welcome sometimes (save this, send it to someone
+  who needs it, drop a comment) but don't force one into every post.
+- Still him: grounded and encouraging, a doctor and executive who has lived
+  it. Casual never means sloppy or hypey.
+
+HIS SIGNATURE LINES AND IDEAS (draw on these, don't copy them every time):
+{samples}"""
+
 PROMPT_TEMPLATE = """You are the social media writer for Iroko Lifesciences Advisory, the biopharma
 strategic advisory practice of Dr. Ike Ogbaa, MD. You write his social posts
-(published to Instagram, Facebook, and LinkedIn) in his established voice.
+in his established voice. This post is for {platform_label}.
 
-WHO HE IS:
-- Physician and biopharma executive (20+ years): former CMO & Head of Medical
-  Affairs; advisor to biopharma founders, investors, and medical affairs leaders;
-  $5B+ in exits. Fractional CEO/CMO for preclinical-to-Phase-2 biotechs.
-- Author of "Dr. Ike's Triangle of Leadership: How to Attract, Move, and Scale People".
-- Signature framing: helping teams translate science into strategy and market
-  impact — "turn congress signal into strategy", "turning complex clinical data
-  into credible, fundable strategy".
-- Therapeutic areas he actually covers: obesity/cardiometabolic (GLP-1s, amylin,
-  MASH), nephrology and kidney health, rare and specialty disease, immunology
-  (myasthenia gravis, thyroid eye disease, CIDP), diabetes; plus AI in pharma and
-  clinical-trial diversity and access (including sub-Saharan Africa).
+{who}
 
-VOICE (from his real posts):
-- Hook first: open with the tension or headline, then unpack it ("The buzz around
-  Lilly's −29% weight-loss headline is everywhere, but let's dive into the details.").
-- Data-precise and skeptical-but-fair: exact numbers, sample-size caveats, lines
-  like "deserves an asterisk" and "signal worth tracking, not yet a story to tell".
-- Measured, credible, warm. Never hypey or clickbait. No exaggerated claims. Avoid
-  anything that reads as medical advice or a regulatory/efficacy claim about a product.
-- Almost no emoji in the caption body.
-- ALWAYS include 2 to 5 hashtags (they drive viewership): mix one or two
-  high-reach tags (#Biopharma, #Leadership, #DrugDevelopment) with niche tags
-  specific to the post's topic. Hashtags go in the hashtags field, not the caption.
+{human_rules}
 
-MATCH HIS STYLE using these real recent posts as reference for length, structure,
-and tone:
-{recent_posts}
+{voice}
 
 {task}
 
@@ -99,11 +178,30 @@ REQUIRED_KEYS = ("caption", "hashtags", "image_text")
 WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search", "max_uses": 3}
 
 
-def _load_recent_posts() -> str:
+def _read_text(path) -> str:
     try:
-        return config.SAMPLE_POSTS_FILE.read_text(encoding="utf-8").strip()
+        return path.read_text(encoding="utf-8").strip()
     except FileNotFoundError:
         return ""
+
+
+def _humanize(text: str) -> str:
+    """Dr. Ike wants no em dashes or double hyphens anywhere in the copy."""
+    text = re.sub(r"\s*(?:--+|—|–)\s+", ", ", text)   # dash used as a pause
+    text = re.sub(r"(?<=\w)(?:--+|—)(?=\w)", ", ", text)  # word—word
+    text = re.sub(r"\s+([,.!?;:])", r"\1", text)
+    return re.sub(r",{2,}", ",", text)
+
+
+def _voice_block(category: str) -> str:
+    if CATEGORIES[category]["platform"] == "instagram":
+        samples = _read_text(config.BOOK_QUOTES_FILE) or "(none on file)"
+        return VOICE_INSTAGRAM.format(samples=samples)
+    samples = "\n\n".join(
+        s for s in (_read_text(config.SAMPLE_POSTS_FILE),
+                    _read_text(config.BOOK_QUOTES_FILE)) if s
+    ) or "(none on file)"
+    return VOICE_LINKEDIN.format(samples=samples)
 
 
 def _build_prompt(category: str, source_theme: str | None,
@@ -111,8 +209,8 @@ def _build_prompt(category: str, source_theme: str | None,
                   lessons: list[str] | None = None,
                   top_performers: list[tuple[int, str]] | None = None,
                   photos: list[tuple[int, str]] | None = None) -> str:
-    brief = CATEGORIES[category]["brief"]
-    task = f"TASK: Write ONE post. Today's category: {brief}"
+    spec = CATEGORIES[category]
+    task = f"TASK: Write ONE post. Today's category: {spec['brief']}"
     if photos:
         lines = "\n".join(f"{i}. {desc}" for i, desc in photos)
         task += (
@@ -151,7 +249,13 @@ def _build_prompt(category: str, source_theme: str | None,
                 "\n\nToday's other drafts are below. Write something clearly different"
                 " from all of them — different topic, angle, and opening line:\n" + drafts
             )
-    return PROMPT_TEMPLATE.format(recent_posts=_load_recent_posts(), task=task)
+    return PROMPT_TEMPLATE.format(
+        platform_label="Instagram" if spec["platform"] == "instagram" else "LinkedIn",
+        who=WHO_HE_IS,
+        human_rules=HUMAN_RULES,
+        voice=_voice_block(category),
+        task=task,
+    )
 
 
 def _extract_json(text: str) -> dict:
@@ -176,6 +280,8 @@ def _extract_json(text: str) -> dict:
     if missing:
         raise ValueError(f"missing/empty keys in response: {missing}")
     result = {k: str(data.get(k, "")).strip() for k in REQUIRED_KEYS}
+    result["caption"] = _humanize(result["caption"])
+    result["image_text"] = _humanize(result["image_text"])
     # 2-5 hashtags on every post — they drive viewership
     tags = [t for t in result["hashtags"].split() if t.startswith("#")]
     if len(tags) < 2:

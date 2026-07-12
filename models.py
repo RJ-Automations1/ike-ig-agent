@@ -23,10 +23,11 @@ class Post(Base):
     id = Column(String(36), primary_key=True, default=new_uuid)
     # groups a post with its redo revisions; defaults to the post's own id
     post_group_id = Column(String(36), nullable=False)
+    # instagram | linkedin — the one platform this post was written for
     platform = Column(String(32), nullable=False, default="instagram")
     # pending | approved | publishing | published | failed | rejected
     status = Column(String(20), nullable=False, default="pending", index=True)
-    # medical | growth | career (see generator.CATEGORIES); null on legacy rows
+    # key from generator.CATEGORIES; null/legacy keys on old rows
     category = Column(String(32), nullable=True)
     caption = Column(Text, nullable=False)
     hashtags = Column(Text, nullable=False, default="")
@@ -56,7 +57,7 @@ class Publication(Base):
 
     id = Column(String(36), primary_key=True, default=new_uuid)
     post_id = Column(String(36), ForeignKey("posts.id"), nullable=False, index=True)
-    platform = Column(String(32), nullable=False)  # instagram | facebook | linkedin
+    platform = Column(String(32), nullable=False)  # instagram | linkedin
     # publishing | published | failed
     status = Column(String(20), nullable=False, default="publishing")
     external_id = Column(Text, nullable=True)

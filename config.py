@@ -38,21 +38,19 @@ IG_USER_ID = os.getenv("IG_USER_ID", "")
 IG_ACCESS_TOKEN = os.getenv("IG_ACCESS_TOKEN", "")
 GRAPH_API_BASE = os.getenv("GRAPH_API_BASE", "https://graph.facebook.com/v21.0")
 
-# Facebook Page
-FB_PAGE_ID = os.getenv("FB_PAGE_ID", "")
-FB_PAGE_ACCESS_TOKEN = os.getenv("FB_PAGE_ACCESS_TOKEN", "")
-
 # LinkedIn
 LINKEDIN_ACCESS_TOKEN = os.getenv("LINKEDIN_ACCESS_TOKEN", "")
 LINKEDIN_AUTHOR_URN = os.getenv("LINKEDIN_AUTHOR_URN", "")  # e.g. urn:li:person:xxxx
 LINKEDIN_API_BASE = os.getenv("LINKEDIN_API_BASE", "https://api.linkedin.com/rest")
 LINKEDIN_VERSION = os.getenv("LINKEDIN_VERSION", "202506")
 
-# Token refresh (refresh_token.py only)
+# Instagram token refresh (refresh_token.py only) — the IG Graph API runs on
+# a Meta developer app, so the app credentials stay even without Facebook posting
 FB_APP_ID = os.getenv("FB_APP_ID", "")
 FB_APP_SECRET = os.getenv("FB_APP_SECRET", "")
 
 # Paths
 MEDIA_DIR = BASE_DIR / "static" / "media"
 FONT_DIR = BASE_DIR / "static" / "fonts"
-SAMPLE_POSTS_FILE = BASE_DIR / "sample_posts.txt"
+SAMPLE_POSTS_FILE = BASE_DIR / "sample_posts.txt"       # his real LinkedIn posts
+BOOK_QUOTES_FILE = BASE_DIR / "book_quotes.txt"         # signature lines from his book

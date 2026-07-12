@@ -1,6 +1,7 @@
-"""Flask app + routes: a login-protected dashboard with three daily post
-options that Dr. Ike can approve, change, or redo — then publish to
-Instagram, Facebook, and/or LinkedIn."""
+"""Flask app + routes: a login-protected dashboard with six daily post
+options (three for Instagram, three for LinkedIn) that Dr. Ike can approve,
+change, or redo — each publishing to its own platform. An Archive tab shows
+everything published, with Instagram analytics per post."""
 import functools
 import hmac
 import logging
@@ -184,6 +185,7 @@ def _create_pending_post(category, source_theme=None, post_group_id=None,
     post = Post(
         id=post_id,
         post_group_id=post_group_id or post_id,
+        platform=CATEGORIES[category]["platform"],
         category=category,
         caption=content["caption"],
         hashtags=content["hashtags"],
@@ -226,12 +228,25 @@ def _pending_posts():
     )
 
 
+def _retire_legacy_drafts():
+    """Pending drafts from a category set that no longer exists are rejected
+    (their photos released) so the dashboard only shows current slots."""
+    session = SessionLocal()
+    for post in _pending_posts():
+        if post.category not in CATEGORIES:
+            post.status = "rejected"
+            session.commit()
+            _release_photos(session, post)
+            app.logger.info("Retired legacy pending draft %s (%s)", post.id, post.category)
+
+
 def _top_up_options(theme=None):
     """Generate one pending post per category that isn't already covered.
 
     Each draft is told about the existing ones so the options differ.
     Returns (created, errors).
     """
+    _retire_legacy_drafts()
     pending = _pending_posts()
     covered = {p.category for p in pending}
     # photo posts don't occupy a category slot
@@ -340,7 +355,8 @@ def generate_batch():
 @login_required
 def dashboard():
     session = SessionLocal()
-    pending = _pending_posts()
+    order = {key: i for i, key in enumerate(CATEGORIES)}
+    pending = sorted(_pending_posts(), key=lambda p: order.get(p.category, 99))
     lessons = (
         session.query(Lesson).order_by(Lesson.created_at.desc()).limit(20).all()
     )
@@ -349,13 +365,52 @@ def dashboard():
     )
     return render_template(
         "dashboard.html",
-        pending=pending,
+        pending_by_platform={
+            platform: [p for p in pending if p.platform == platform]
+            for platform in PLATFORMS
+        },
+        pending_total=len(pending),
         lessons=lessons,
         photos=photos,
-        platforms=PLATFORMS,
         platform_labels=PLATFORM_LABELS,
         categories=CATEGORIES,
         daily_count=len(CATEGORIES),
+        today=utcnow().strftime("%A, %B %-d"),
+    )
+
+
+@app.get("/archive")
+@login_required
+def archive():
+    """Everything published, newest first, with per-post Instagram analytics.
+
+    Stale Instagram metrics are refreshed quietly (a few per page load) so the
+    numbers stay current without a background worker.
+    """
+    session = SessionLocal()
+    posts = (
+        session.query(Post)
+        .filter(Post.status == "published")
+        .order_by(Post.published_at.desc())
+        .limit(200)
+        .all()
+    )
+    refreshed = 0
+    for post in posts:
+        for pub in post.publications:
+            if refreshed >= 10:
+                break
+            if pub.status == "published" and analytics.is_stale(pub):
+                try:
+                    if analytics.refresh_publication(session, pub):
+                        refreshed += 1
+                except Exception:
+                    app.logger.exception("Metrics refresh failed for %s", pub.id)
+    return render_template(
+        "archive.html",
+        posts=posts,
+        platform_labels=PLATFORM_LABELS,
+        categories=CATEGORIES,
         today=utcnow().strftime("%A, %B %-d"),
     )
 
@@ -446,10 +501,9 @@ def publish(post_id):
     session = SessionLocal()
     post = _get_post_or_404(post_id)
 
-    platforms = [p for p in request.form.getlist("platforms") if p in PLATFORMS]
-    if not platforms:
-        flash("Pick at least one platform before publishing.", "error")
-        return redirect(url_for("dashboard"))
+    # each post was written for exactly one platform
+    platform = post.platform if post.platform in PLATFORMS else "instagram"
+    label = PLATFORM_LABELS[platform]
 
     before = _apply_edits(session, post)
     if before:
@@ -468,44 +522,34 @@ def publish(post_id):
         return redirect(url_for("dashboard"))
 
     session.refresh(post)
-    succeeded, failed = [], []
-    for platform in platforms:
-        pub = Publication(post_id=post.id, platform=platform)
-        session.add(pub)
-        session.commit()
-        try:
-            external_id = get_publisher(platform).publish(post)
-            pub.status = "published"
-            pub.external_id = external_id
-            pub.published_at = utcnow()
-            if platform == "instagram":
-                post.ig_media_id = external_id
-            succeeded.append(platform)
-        except Exception as e:
-            app.logger.exception("Publishing post %s to %s failed", post.id, platform)
-            pub.status = "failed"
-            pub.error = str(e)
-            failed.append((platform, str(e)))
-        session.commit()
-
-    post.status = "published" if succeeded else "failed"
-    post.published_at = utcnow() if succeeded else None
-    post.error = "; ".join(f"{PLATFORM_LABELS[p]}: {err}" for p, err in failed) or None
+    pub = Publication(post_id=post.id, platform=platform)
+    session.add(pub)
     session.commit()
-    if succeeded:
-        _retire_photos(session, post)   # a published photo is used exactly once
-    else:
-        _release_photos(session, post)  # nothing went out — photo returns to the library
+    error = None
+    try:
+        external_id = get_publisher(platform).publish(post)
+        pub.status = "published"
+        pub.external_id = external_id
+        pub.published_at = utcnow()
+        if platform == "instagram":
+            post.ig_media_id = external_id
+    except Exception as e:
+        app.logger.exception("Publishing post %s to %s failed", post.id, platform)
+        pub.status = "failed"
+        pub.error = str(e)
+        error = str(e)
+    session.commit()
 
-    if succeeded:
-        msg = "Published to " + ", ".join(PLATFORM_LABELS[p] for p in succeeded) + "."
-        if failed:
-            msg += " Failed on " + "; ".join(
-                f"{PLATFORM_LABELS[p]}: {err[:160]}" for p, err in failed) + "."
-        flash(msg, "ok" if not failed else "error")
+    post.status = "failed" if error else "published"
+    post.published_at = None if error else utcnow()
+    post.error = f"{label}: {error}" if error else None
+    session.commit()
+    if error:
+        _release_photos(session, post)  # nothing went out — photo returns to the library
+        flash(f"Publishing to {label} failed: {error[:200]}", "error")
     else:
-        flash("Publishing failed on every platform — " + "; ".join(
-            f"{PLATFORM_LABELS[p]}: {err[:160]}" for p, err in failed), "error")
+        _retire_photos(session, post)   # a published photo is used exactly once
+        flash(f"Published to {label}.", "ok")
     return redirect(url_for("dashboard"))
 
 

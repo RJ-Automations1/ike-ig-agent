@@ -4,18 +4,22 @@ A social posting agent for **Dr. Ike Ogbaa, MD** (Iroko Lifesciences Advisory).
 
 The flow:
 
-1. A daily cron (or the dashboard button) generates **three post options, one per
-   category** — Medical space (with web search, so it reacts to actual current
-   developments), Personal growth, and Career motivation. Each is an on-brand
-   caption + hashtags + quotable line written by Claude, rendered as a branded
-   1080×1080 quote card with Pillow, and saved as a **pending** draft. Each option
-   is told about the others so the three don't overlap. Categories are defined in
-   `generator.CATEGORIES` — edit the briefs there to steer the content mix.
+1. A daily cron (or the dashboard button) generates **six post options, one per
+   category** — three for **Instagram** (Career Motivation, Medspace Motivation,
+   Motivation: short, casual, quote-on-the-card) and three for **LinkedIn**
+   (Article Response with web search so it reacts to a real current article,
+   Career Motivation in his own words, and a Motivational Quote in LinkedIn
+   format). Each is an on-brand caption + hashtags + quotable line written by
+   Claude, rendered as a branded 1080×1080 quote card with Pillow, and saved as
+   a **pending** draft. Each option is told about the others so they don't
+   overlap. Categories are defined in `generator.CATEGORIES` — edit the briefs
+   there to steer the content mix.
 2. Dr. Ike **logs in to the live dashboard** (password-protected) and reviews the options.
-3. For each option he can **Approve & publish**, **Save changes** (edit caption/hashtags),
+3. For each option he can **Publish**, **Save changes** (edit caption/hashtags),
    or **Redo** (discard and regenerate, optionally with a steering note).
-4. Approving publishes to the platforms he selects — **Instagram**, **Facebook**,
-   and/or **LinkedIn** — with a per-platform result recorded in the `publications` table.
+4. Each post publishes to the one platform it was written for, with the result
+   recorded in the `publications` table. An **Archive** tab lists everything
+   published, color-coded by platform, with per-post Instagram analytics.
 
 ## Project layout
 
@@ -26,9 +30,9 @@ models.py             SQLAlchemy models (posts, publications, ig_credentials)
 db.py                 engine/session setup + init_db()
 generator.py          Claude call -> caption/hashtags/image_text
 imagegen.py           Pillow -> branded JPEG quote card
-publisher.py          Instagram / Facebook / LinkedIn publishers + dev mock
+publisher.py          Instagram / LinkedIn publishers + dev mock
 refresh_token.py      standalone script for the Render Cron Job (IG token)
-templates/            login.html, dashboard.html
+templates/            login.html, dashboard.html, archive.html
 static/brand.css      design tokens extracted from drikeadvisory.com
 static/fonts/         Fraunces + Inter TTFs (bundled so cards render anywhere)
 static/media/         rendered post images (served publicly)
@@ -59,9 +63,11 @@ curl -s -X POST http://localhost:5000/generate -H "X-Generate-Secret: <secret>"
 ### Sample posts (voice matching)
 
 `sample_posts.txt` holds transcriptions of Dr. Ike's real LinkedIn posts and is
-injected into the Claude prompt as style reference. Add new posts to it over time
-(plain text, any separator) to keep the voice current — it's checked into the repo
-so it deploys with the app.
+injected into LinkedIn prompts as style reference; `book_quotes.txt` holds
+signature lines from "Dr. Ike's Triangle of Leadership" and feeds both platforms
+(it's the quote source for Instagram cards). Add material over time (plain text,
+any separator) to keep the voice current — both are checked into the repo so
+they deploy with the app.
 
 ## Environment variables
 
@@ -72,12 +78,11 @@ See `.env.example`. Notes:
 | `ANTHROPIC_MODEL` | defaults to `claude-sonnet-5` |
 | `DASHBOARD_PASSWORD` | required — the dashboard refuses logins until it's set |
 | `GENERATE_SECRET` | **set this in production** — without it, `POST /generate` is open |
-| `APP_BASE_URL` | must be the public HTTPS URL; Instagram/Facebook fetch images from it |
+| `APP_BASE_URL` | must be the public HTTPS URL; Instagram fetches images from it |
 | `USE_MOCK_PUBLISHER` | `true` in dev; `false` to publish for real (all platforms) |
 | `IG_USER_ID` / `IG_ACCESS_TOKEN` | seed the `ig_credentials` table on first startup |
-| `FB_PAGE_ID` / `FB_PAGE_ACCESS_TOKEN` | Facebook Page publishing (same Meta app) |
 | `LINKEDIN_ACCESS_TOKEN` / `LINKEDIN_AUTHOR_URN` | LinkedIn publishing (see below) |
-| `FB_APP_ID` / `FB_APP_SECRET` | used only by `refresh_token.py` (fb_exchange_token grant) |
+| `FB_APP_ID` / `FB_APP_SECRET` | used only by `refresh_token.py` (fb_exchange_token grant — the IG Graph API runs on a Meta app) |
 
 ## Deploy to Render
 
@@ -86,7 +91,7 @@ dashboard.render.com → **New +** → **Blueprint** → pick this repo. It prov
 
 1. **Postgres** (`ike-agent-db`) — wired into `DATABASE_URL` automatically.
 2. **Web Service** (`ike-agent`) — `gunicorn --timeout 600 --threads 8 app:app` (generation
-   happens inside web requests and takes ~2 min for a full batch), with a 1 GB
+   happens inside web requests and takes several minutes for a full 6-post batch), with a 1 GB
    persistent disk mounted at `static/media`. You're prompted for
    `ANTHROPIC_API_KEY` and `DASHBOARD_PASSWORD`; `FLASK_SECRET_KEY` and
    `GENERATE_SECRET` are auto-generated. `USE_MOCK_PUBLISHER` starts as `true` —
@@ -110,10 +115,6 @@ token before it expires (~60 days).
 - Publishing uses `graph.facebook.com/v21.0`: `POST /{ig_user_id}/media` (container) then
   `POST /{ig_user_id}/media_publish`.
 
-### Facebook
-- Publishes the card as a **Page photo post**: `POST /{page_id}/photos` with `url` +
-  `caption`. Needs a Page access token with `pages_manage_posts` from the same Meta app.
-
 ### LinkedIn
 - Three-step publish: `POST /rest/images?action=initializeUpload` → `PUT` the image
   bytes → `POST /rest/posts`. Needs an OAuth token with `w_member_social` (personal
@@ -134,8 +135,8 @@ fine for pending drafts published quickly, but a disk is safer.
 pointing at the old draft and the same `post_group_id`.
 
 Each publish attempt writes a row in `publications` (`post_id`, `platform`, `status`,
-`external_id`, `error`). A post is `published` if **any** selected platform succeeded;
-per-platform failures are reported in the dashboard's flash banner.
+`external_id`, `error`). Every post targets exactly one platform (`posts.platform`);
+publish failures are reported in the dashboard's flash banner.
 
 Approval is idempotent: the pending → publishing transition is an atomic claim, so a
 double-click can never publish twice.

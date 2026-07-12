@@ -4,7 +4,7 @@
 # You will be prompted for the two sync:false secrets (ANTHROPIC_API_KEY,
 # DASHBOARD_PASSWORD) when the blueprint is created. Everything else is wired
 # automatically. USE_MOCK_PUBLISHER starts as "true" — flip it to "false" in the
-# dashboard once the real Instagram/Facebook/LinkedIn credentials are added.
+# dashboard once the real Instagram/LinkedIn credentials are added.
 
 databases:
   - name: ike-agent-db
@@ -18,7 +18,7 @@ services:
     plan: starter # persistent disks require a paid instance
     buildCommand: pip install -r requirements.txt
     # generation happens inside web requests (button + cron endpoint) and takes
-    # ~2 min for a full 3-category batch: raise gunicorn's worker timeout, and
+    # several minutes for a full 6-post batch: raise gunicorn's worker timeout, and
     # use threads so Render's health checks get answered during generation
     # (a single sync worker fails the 5s health check and gets restarted mid-request)
     startCommand: gunicorn --timeout 600 --threads 8 app:app
@@ -48,10 +48,6 @@ services:
       - key: IG_USER_ID
         value: ""
       - key: IG_ACCESS_TOKEN
-        value: ""
-      - key: FB_PAGE_ID
-        value: ""
-      - key: FB_PAGE_ACCESS_TOKEN
         value: ""
       - key: LINKEDIN_ACCESS_TOKEN
         value: ""

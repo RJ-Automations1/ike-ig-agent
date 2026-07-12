@@ -59,20 +59,26 @@
 
     <div class="section-head">
       <h1>Today's post options</h1>
-      {% if pending|length < daily_count %}
+      {% if pending_total < daily_count %}
       <form method="post" action="{{ url_for('generate_batch') }}">
         <button class="btn btn-secondary"
                 onclick="this.disabled=true;this.textContent='Generating…';this.form.submit();">
-          {% if pending %}Generate {{ daily_count - pending|length }} more{% else %}Generate today's options{% endif %}
+          {% if pending_total %}Generate {{ daily_count - pending_total }} more{% else %}Generate today's options{% endif %}
         </button>
       </form>
       {% endif %}
     </div>
 
-    {% if pending %}
+    {% for platform, posts in pending_by_platform.items() %}
+    <div class="platform-head">
+      <span class="platform-badge {{ platform }}">{{ platform_labels[platform] }}</span>
+      <span class="platform-count">{{ posts|length }} of 3 options waiting</span>
+    </div>
+
+    {% if posts %}
     <div class="options-grid">
-      {% for post in pending %}
-      <div class="card option-card" id="post-{{ post.id }}">
+      {% for post in posts %}
+      <div class="card option-card {{ post.platform }}" id="post-{{ post.id }}">
         <img class="post-image" src="{{ post.image_url }}" alt="Post image: {{ post.image_text }}">
         <div class="card-body">
           <div class="eyebrow">
@@ -91,26 +97,15 @@
             <label for="hashtags-{{ post.id }}">Hashtags</label>
             <input type="text" id="hashtags-{{ post.id }}" name="hashtags" value="{{ post.hashtags }}">
 
-            <label>Publish to</label>
-            <div class="platforms">
-              {% for platform in platforms %}
-              <label class="platform-pill">
-                <input type="checkbox" name="platforms" value="{{ platform }}"
-                       {% if platform == 'instagram' %}checked{% endif %}>
-                <span>{{ platform_labels[platform] }}</span>
-              </label>
-              {% endfor %}
-            </div>
-
             <label for="note-{{ post.id }}" class="redo-note">Note for redo (optional)</label>
             <input type="text" id="note-{{ post.id }}" name="note"
-                   placeholder="e.g. make it about rare disease launches">
+                   placeholder="e.g. make it about mentorship">
 
             <div class="actions">
               <button class="btn btn-primary"
                       formaction="{{ url_for('publish', post_id=post.id) }}"
-                      onclick="return confirm('Publish this post to the selected platforms?');">
-                Approve &amp; publish
+                      onclick="return confirm('Publish this post to {{ platform_labels[post.platform] }}?');">
+                Publish to {{ platform_labels[post.platform] }}
               </button>
               <button class="btn btn-secondary"
                       formaction="{{ url_for('save', post_id=post.id) }}">
@@ -128,12 +123,13 @@
       {% endfor %}
     </div>
     {% else %}
-    <div class="card">
+    <div class="card platform-empty">
       <div class="card-body empty-state">
-        <p>No options waiting for review. Generate a fresh set above, or check back after tomorrow's batch.</p>
+        <p>No {{ platform_labels[platform] }} options waiting. Generate a fresh set above, or check back after tomorrow's batch.</p>
       </div>
     </div>
     {% endif %}
+    {% endfor %}
 
     <h2 class="history-head">What the agent has learned</h2>
     <div class="card">
@@ -161,7 +157,16 @@
       </div>
     </div>
 
-    <p class="footer-note">Approving publishes the caption and hashtags exactly as shown, to every platform you've selected.</p>
+    <p class="footer-note">Each card publishes the caption and hashtags exactly as shown, to that card's platform.</p>
   </div>
+
+  <script>
+    // captions are always fully visible — the boxes grow with their content
+    document.querySelectorAll("textarea").forEach(function (t) {
+      var fit = function () { t.style.height = "auto"; t.style.height = (t.scrollHeight + 2) + "px"; };
+      t.addEventListener("input", fit);
+      fit();
+    });
+  </script>
 </body>
 </html>

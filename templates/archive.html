@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Archive — Iroko Lifesciences Advisory</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='brand.css') }}">
+</head>
+<body>
+  <div class="page page-wide">
+    {% set active_page = 'archive' %}
+    {% include "_topbar.html" %}
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+      <div class="notice {{ 'notice-error' if category == 'error' }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <div class="section-head">
+      <h1>Archive</h1>
+      <span class="meta archive-count">{{ posts|length }} published post{{ 's' if posts|length != 1 }}</span>
+    </div>
+
+    {% if posts %}
+    <div class="archive-grid">
+      {% for post in posts %}
+      <div class="card archive-card {{ post.platform }}">
+        <img class="post-image" src="{{ post.image_url }}" alt="Post image: {{ post.image_text }}">
+        <div class="card-body">
+          <div class="archive-top">
+            <span class="platform-badge {{ post.platform }}">{{ platform_labels.get(post.platform, post.platform|capitalize) }}</span>
+            {% if post.published_at %}
+            <span class="archive-date">{{ post.published_at.strftime('%b %-d, %Y') }}</span>
+            {% endif %}
+          </div>
+          <div class="eyebrow">
+            {{ categories[post.category].label if post.category in categories else (post.category or 'Post')|replace('_', ' ')|capitalize }}
+          </div>
+          <p class="archive-caption">{{ post.caption }}</p>
+          {% if post.hashtags %}<p class="archive-hashtags">{{ post.hashtags }}</p>{% endif %}
+
+          {% if post.platform == 'instagram' %}
+            {% set pubs = post.publications | selectattr('platform', 'equalto', 'instagram')
+                          | selectattr('status', 'equalto', 'published') | list %}
+            {% set pub = pubs | last if pubs else none %}
+            {% if pub and pub.has_metrics %}
+            <div class="metrics">
+              <div class="metric"><strong>{{ '{:,}'.format(pub.likes or 0) }}</strong><span>Likes</span></div>
+              <div class="metric"><strong>{{ '{:,}'.format(pub.comments or 0) }}</strong><span>Comments</span></div>
+              <div class="metric"><strong>{{ '{:,}'.format(pub.shares or 0) }}</strong><span>Shares</span></div>
+              <div class="metric"><strong>{{ '{:,}'.format(pub.impressions or 0) }}</strong><span>Reach</span></div>
+            </div>
+            {% if pub.metrics_source == 'mock' %}
+            <p class="metrics-note">Sample numbers — real Instagram analytics start once publishing goes live.</p>
+            {% endif %}
+            {% else %}
+            <p class="metrics-note">Instagram analytics will appear here shortly after publishing.</p>
+            {% endif %}
+          {% else %}
+            <p class="metrics-note">LinkedIn doesn't share analytics for personal profiles — check the post on LinkedIn.</p>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="card">
+      <div class="card-body empty-state">
+        <p>Nothing published yet. Approved posts land here, color-coded by platform, with Instagram analytics on each IG post.</p>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</body>
+</html>
