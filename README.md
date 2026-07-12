@@ -85,7 +85,7 @@ The repo ships a **Blueprint** (`render.yaml`) that creates the whole stack:
 dashboard.render.com → **New +** → **Blueprint** → pick this repo. It provisions:
 
 1. **Postgres** (`ike-agent-db`) — wired into `DATABASE_URL` automatically.
-2. **Web Service** (`ike-agent`) — `gunicorn --timeout 600 app:app` (generation
+2. **Web Service** (`ike-agent`) — `gunicorn --timeout 600 --threads 8 app:app` (generation
    happens inside web requests and takes ~2 min for a full batch), with a 1 GB
    persistent disk mounted at `static/media`. You're prompted for
    `ANTHROPIC_API_KEY` and `DASHBOARD_PASSWORD`; `FLASK_SECRET_KEY` and

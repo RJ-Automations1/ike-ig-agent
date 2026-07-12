@@ -18,8 +18,10 @@ services:
     plan: starter # persistent disks require a paid instance
     buildCommand: pip install -r requirements.txt
     # generation happens inside web requests (button + cron endpoint) and takes
-    # ~2 min for a full 3-category batch; raise gunicorn's worker timeout
-    startCommand: gunicorn --timeout 600 app:app
+    # ~2 min for a full 3-category batch: raise gunicorn's worker timeout, and
+    # use threads so Render's health checks get answered during generation
+    # (a single sync worker fails the 5s health check and gets restarted mid-request)
+    startCommand: gunicorn --timeout 600 --threads 8 app:app
     healthCheckPath: /login
     disk:
       name: media
