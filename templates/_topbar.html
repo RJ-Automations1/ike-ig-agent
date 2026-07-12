@@ -1,0 +1,10 @@
+<header class="brand-header topbar">
+  <div class="monogram">IL</div>
+  <div class="wordmark">Iroko Lifesciences Advisory
+    <small>Content dashboard</small>
+  </div>
+  <div class="topbar-right">
+    {% if today %}<span class="meta today">{{ today }}</span>{% endif %}
+    <a class="btn btn-ghost" href="{{ url_for('logout') }}">Log out</a>
+  </div>
+</header>

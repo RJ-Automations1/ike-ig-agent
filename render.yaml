@@ -1,0 +1,92 @@
+# Render Blueprint — creates the whole stack in one shot:
+#   dashboard.render.com -> New + -> Blueprint -> pick this repo.
+#
+# You will be prompted for the two sync:false secrets (ANTHROPIC_API_KEY,
+# DASHBOARD_PASSWORD) when the blueprint is created. Everything else is wired
+# automatically. USE_MOCK_PUBLISHER starts as "true" — flip it to "false" in the
+# dashboard once the real Instagram/Facebook/LinkedIn credentials are added.
+
+databases:
+  - name: ike-agent-db
+    plan: basic-256mb # smallest paid tier; the free tier expires and drops data
+
+services:
+  # ---- the dashboard -------------------------------------------------------
+  - type: web
+    name: ike-agent
+    runtime: python
+    plan: starter # persistent disks require a paid instance
+    buildCommand: pip install -r requirements.txt
+    # generation happens inside web requests (button + cron endpoint) and takes
+    # ~2 min for a full 3-category batch; raise gunicorn's worker timeout
+    startCommand: gunicorn --timeout 600 app:app
+    healthCheckPath: /login
+    disk:
+      name: media
+      mountPath: /opt/render/project/src/static/media
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ike-agent-db
+          property: connectionString
+      - key: FLASK_SECRET_KEY
+        generateValue: true
+      - key: GENERATE_SECRET
+        generateValue: true
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: DASHBOARD_PASSWORD
+        sync: false
+      - key: USE_MOCK_PUBLISHER
+        value: "true"
+      # go-live credentials — add values in the Render dashboard when ready:
+      - key: IG_USER_ID
+        value: ""
+      - key: IG_ACCESS_TOKEN
+        value: ""
+      - key: FB_PAGE_ID
+        value: ""
+      - key: FB_PAGE_ACCESS_TOKEN
+        value: ""
+      - key: LINKEDIN_ACCESS_TOKEN
+        value: ""
+      - key: LINKEDIN_AUTHOR_URN
+        value: ""
+      - key: FB_APP_ID
+        value: ""
+      - key: FB_APP_SECRET
+        value: ""
+
+  # ---- daily options -------------------------------------------------------
+  # Calls the web service's /generate endpoint so the rendered images land on
+  # the web service's disk. (Running the generator directly in this cron would
+  # write images to THIS container's filesystem, which the dashboard can't serve.)
+  # 11:00 UTC = 7:00 AM US Eastern (EDT).
+  - type: cron
+    name: ike-agent-daily
+    runtime: python
+    schedule: "0 11 * * *"
+    buildCommand: "true"
+    startCommand: >-
+      curl -fsS -m 1200 -X POST
+      -H "X-Generate-Secret: $GENERATE_SECRET"
+      "https://$APP_HOST/generate"
+    envVars:
+      - key: GENERATE_SECRET
+        fromService:
+          type: web
+          name: ike-agent
+          envVarKey: GENERATE_SECRET
+      - key: APP_HOST
+        fromService:
+          type: web
+          name: ike-agent
+          property: host
+
+# When going live with real Instagram credentials, add a weekly token-refresh
+# cron (see README): runtime python, buildCommand `pip install -r requirements.txt`,
+# startCommand `python refresh_token.py`, schedule "0 8 * * 1", with DATABASE_URL,
+# FB_APP_ID, and FB_APP_SECRET env vars.

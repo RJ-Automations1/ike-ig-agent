@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Dashboard — Iroko Lifesciences Advisory</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='brand.css') }}">
+</head>
+<body>
+  <div class="page page-wide">
+    {% set active_page = 'dashboard' %}
+    {% include "_topbar.html" %}
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+      <div class="notice {{ 'notice-error' if category == 'error' }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <h2 class="history-head">Photo library</h2>
+    <div class="card">
+      <div class="card-body">
+        <form method="post" action="{{ url_for('upload_photos') }}"
+              enctype="multipart/form-data" class="upload-form">
+          <div class="upload-intro">
+            <p class="meta">Upload photos and the agent weaves them into generated posts
+              when one fits the story. Each photo is used once, then retired.</p>
+          </div>
+          <input type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple required>
+          <button class="btn btn-primary"
+                  onclick="if(this.form.reportValidity()){this.disabled=true;this.textContent='Adding…';this.form.submit();}return false;">
+            Add to library
+          </button>
+        </form>
+
+        {% if photos %}
+        <div class="photo-grid">
+          {% for photo in photos %}
+          <div class="photo-tile" title="{{ photo.description }}">
+            <img src="{{ url_for('static', filename='media/' ~ photo.filename) }}" alt="{{ photo.description }}">
+            <span class="photo-badge {{ photo.status }}">
+              {{ {'available': 'Ready', 'reserved': 'In a draft', 'used': 'Used'}[photo.status] }}
+            </span>
+            {% if photo.status == 'available' %}
+            <form method="post" action="{{ url_for('delete_photo', photo_id=photo.id) }}">
+              <button class="photo-x" title="Remove from library"
+                      onclick="return confirm('Remove this photo from the library?');">✕</button>
+            </form>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="section-head">
+      <h1>Today's post options</h1>
+      {% if pending|length < daily_count %}
+      <form method="post" action="{{ url_for('generate_batch') }}">
+        <button class="btn btn-secondary"
+                onclick="this.disabled=true;this.textContent='Generating…';this.form.submit();">
+          {% if pending %}Generate {{ daily_count - pending|length }} more{% else %}Generate today's options{% endif %}
+        </button>
+      </form>
+      {% endif %}
+    </div>
+
+    {% if pending %}
+    <div class="options-grid">
+      {% for post in pending %}
+      <div class="card option-card" id="post-{{ post.id }}">
+        <img class="post-image" src="{{ post.image_url }}" alt="Post image: {{ post.image_text }}">
+        <div class="card-body">
+          <div class="eyebrow">
+            {% if post.category in categories %}{{ categories[post.category].label }}{% else %}Option {{ loop.index }}{% endif %}
+          </div>
+          <p class="meta">
+            Drafted {{ post.created_at.strftime('%b %-d, %H:%M UTC') }}
+            {% if post.source_theme %}· {{ post.source_theme }}{% endif %}
+            {% if post.revision_of %}· redo{% endif %}
+          </p>
+
+          <form method="post">
+            <label for="caption-{{ post.id }}">Caption</label>
+            <textarea id="caption-{{ post.id }}" name="caption" required>{{ post.caption }}</textarea>
+
+            <label for="hashtags-{{ post.id }}">Hashtags</label>
+            <input type="text" id="hashtags-{{ post.id }}" name="hashtags" value="{{ post.hashtags }}">
+
+            <label>Publish to</label>
+            <div class="platforms">
+              {% for platform in platforms %}
+              <label class="platform-pill">
+                <input type="checkbox" name="platforms" value="{{ platform }}"
+                       {% if platform == 'instagram' %}checked{% endif %}>
+                <span>{{ platform_labels[platform] }}</span>
+              </label>
+              {% endfor %}
+            </div>
+
+            <label for="note-{{ post.id }}" class="redo-note">Note for redo (optional)</label>
+            <input type="text" id="note-{{ post.id }}" name="note"
+                   placeholder="e.g. make it about rare disease launches">
+
+            <div class="actions">
+              <button class="btn btn-primary"
+                      formaction="{{ url_for('publish', post_id=post.id) }}"
+                      onclick="return confirm('Publish this post to the selected platforms?');">
+                Approve &amp; publish
+              </button>
+              <button class="btn btn-secondary"
+                      formaction="{{ url_for('save', post_id=post.id) }}">
+                Save changes
+              </button>
+              <button class="btn btn-ghost"
+                      formaction="{{ url_for('redo', post_id=post.id) }}"
+                      onclick="return confirm('Discard this option and generate a new one?');">
+                Redo
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="card">
+      <div class="card-body empty-state">
+        <p>No options waiting for review. Generate a fresh set above, or check back after tomorrow's batch.</p>
+      </div>
+    </div>
+    {% endif %}
+
+    <h2 class="history-head">What the agent has learned</h2>
+    <div class="card">
+      <div class="card-body">
+        {% if lessons %}
+        <ul class="lessons">
+          {% for lesson in lessons %}
+          <li>
+            <span class="lesson-text">{{ lesson.text }}</span>
+            <span class="lesson-meta">
+              {{ categories[lesson.category].label if lesson.category in categories else 'All posts' }}
+              · from {{ 'an edit' if lesson.source == 'edit' else 'a redo note' }}
+            </span>
+            <form method="post" action="{{ url_for('delete_lesson', lesson_id=lesson.id) }}">
+              <button class="btn-x" title="Forget this lesson"
+                      onclick="return confirm('Forget this lesson? New posts will stop following it.');">✕</button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+        <p class="meta lessons-hint">These rules were learned from Dr. Ike's edits and redo notes, and steer every new post. Delete any that are wrong.</p>
+        {% else %}
+        <p class="meta lessons-hint">Nothing yet — when Dr. Ike edits a caption or redoes a post with a note, the agent distills durable preferences and lists them here.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <p class="footer-note">Approving publishes the caption and hashtags exactly as shown, to every platform you've selected.</p>
+  </div>
+</body>
+</html>

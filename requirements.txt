@@ -1,0 +1,8 @@
+flask
+sqlalchemy
+psycopg2-binary
+anthropic
+requests
+pillow
+python-dotenv
+gunicorn
