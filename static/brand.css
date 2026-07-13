@@ -149,6 +149,8 @@ textarea {
   field-sizing: content;
 }
 
+textarea.hashtags-box { min-height: 0; }
+
 .actions {
   display: flex;
   flex-wrap: wrap;

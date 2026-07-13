@@ -95,7 +95,7 @@
             <textarea id="caption-{{ post.id }}" name="caption" required>{{ post.caption }}</textarea>
 
             <label for="hashtags-{{ post.id }}">Hashtags</label>
-            <input type="text" id="hashtags-{{ post.id }}" name="hashtags" value="{{ post.hashtags }}">
+            <textarea id="hashtags-{{ post.id }}" name="hashtags" class="hashtags-box">{{ post.hashtags }}</textarea>
 
             <label for="note-{{ post.id }}" class="redo-note">Note for redo (optional)</label>
             <input type="text" id="note-{{ post.id }}" name="note"
