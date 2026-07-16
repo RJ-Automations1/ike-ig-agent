@@ -42,7 +42,7 @@ GRAPH_API_BASE = os.getenv("GRAPH_API_BASE", "https://graph.facebook.com/v21.0")
 LINKEDIN_ACCESS_TOKEN = os.getenv("LINKEDIN_ACCESS_TOKEN", "")
 LINKEDIN_AUTHOR_URN = os.getenv("LINKEDIN_AUTHOR_URN", "")  # e.g. urn:li:person:xxxx
 LINKEDIN_API_BASE = os.getenv("LINKEDIN_API_BASE", "https://api.linkedin.com/rest")
-LINKEDIN_VERSION = os.getenv("LINKEDIN_VERSION", "202506")
+LINKEDIN_VERSION = os.getenv("LINKEDIN_VERSION", "202606")
 
 # Instagram token refresh (refresh_token.py only) — the IG Graph API runs on
 # a Meta developer app, so the app credentials stay even without Facebook posting
