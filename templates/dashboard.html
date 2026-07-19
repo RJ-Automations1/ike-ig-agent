@@ -57,6 +57,71 @@
       </div>
     </div>
 
+    <h2 class="history-head">Posting focus</h2>
+    <div class="card">
+      <div class="card-body">
+        {% if campaign %}
+        <div class="campaign-active">
+          <div class="campaign-row">
+            <span class="campaign-badge">Active</span>
+            <strong class="campaign-label">{{ campaign.label }}</strong>
+          </div>
+          <p class="meta campaign-meta">
+            {{ campaign.days_left }} day{{ 's' if campaign.days_left != 1 }} left
+            · started {{ campaign.starts_at.strftime('%b %-d') }}
+            · ends {{ campaign.ends_at.strftime('%b %-d') }}
+          </p>
+          <p class="meta campaign-instruction">{{ campaign.instruction }}</p>
+          <div class="actions">
+            <form method="post" action="{{ url_for('end_campaign') }}">
+              <button class="btn btn-secondary"
+                      onclick="return confirm('End this posting focus now? New posts go back to the normal mix.');">
+                End focus now
+              </button>
+            </form>
+          </div>
+        </div>
+        {% else %}
+        {% if expired_campaign %}
+        <div class="notice">
+          The "{{ expired_campaign.label }}" focus ran its course and ended
+          {{ expired_campaign.ends_at.strftime('%b %-d') }} — posts are back to the normal mix.
+        </div>
+        {% endif %}
+        <p class="meta">Point every new post at one goal for a set stretch of time,
+          like pushing the book for a month or filling the speaking calendar for two weeks.
+          It ends on its own when the time is up.</p>
+        <form method="post" action="{{ url_for('start_campaign') }}" class="campaign-form">
+          <div class="campaign-choices">
+            {% for key, preset in campaign_presets.items() %}
+            <label class="campaign-choice">
+              <input type="radio" name="kind" value="{{ key }}" required
+                     onchange="document.getElementById('campaign-custom').style.display='none';">
+              {{ preset.label }}
+            </label>
+            {% endfor %}
+            <label class="campaign-choice">
+              <input type="radio" name="kind" value="custom" required
+                     onchange="document.getElementById('campaign-custom').style.display='block';">
+              Something else…
+            </label>
+          </div>
+          <input type="text" id="campaign-custom" name="custom" style="display:none"
+                 placeholder="e.g. promote the upcoming leadership webinar">
+          <div class="campaign-row">
+            <label for="campaign-days" class="campaign-for">for</label>
+            <select id="campaign-days" name="days">
+              {% for days, label in campaign_durations.items() %}
+              <option value="{{ days }}" {{ 'selected' if days == 30 }}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <button class="btn btn-primary">Set focus</button>
+          </div>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+
     <div class="section-head">
       <h1>Today's post options</h1>
       {% if pending_total < daily_count %}

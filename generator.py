@@ -208,9 +208,19 @@ def _build_prompt(category: str, source_theme: str | None,
                   avoid_captions: list[str] | None,
                   lessons: list[str] | None = None,
                   top_performers: list[tuple[int, str]] | None = None,
-                  photos: list[tuple[int, str]] | None = None) -> str:
+                  photos: list[tuple[int, str]] | None = None,
+                  campaign: str | None = None) -> str:
     spec = CATEGORIES[category]
     task = f"TASK: Write ONE post. Today's category: {spec['brief']}"
+    if campaign and campaign.strip():
+        task += (
+            "\n\nACTIVE CAMPAIGN — Dr. Ike has set a posting focus for this"
+            " period, and every post should serve it while staying true to its"
+            " category:\n" + campaign.strip() +
+            "\nWork the campaign in naturally (an angle, a mention, or a soft"
+            " closing call to action). Never let the post read like an ad, and"
+            " never sacrifice the category's voice for the pitch."
+        )
     if photos:
         lines = "\n".join(f"{i}. {desc}" for i, desc in photos)
         task += (
@@ -325,7 +335,8 @@ def generate_post(category: str, source_theme: str | None = None,
                   avoid_captions: list[str] | None = None,
                   lessons: list[str] | None = None,
                   top_performers: list[tuple[int, str]] | None = None,
-                  photos: list[tuple[int, str]] | None = None) -> dict:
+                  photos: list[tuple[int, str]] | None = None,
+                  campaign: str | None = None) -> dict:
     """Returns {caption, hashtags, image_text, photo}. Raises RuntimeError on failure.
 
     category: key from CATEGORIES.
@@ -335,12 +346,13 @@ def generate_post(category: str, source_theme: str | None = None,
     top_performers: [(engagement_score, caption)] of his best-performing posts.
     photos: [(index, description)] of available library photos; the returned
         "photo" is the chosen index, or None to use the branded quote card.
+    campaign: instruction of the active posting focus, if one is running.
     """
     if category not in CATEGORIES:
         raise ValueError(f"unknown category: {category}")
     client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY or None)
     prompt = _build_prompt(category, source_theme, avoid_captions, lessons,
-                           top_performers, photos)
+                           top_performers, photos, campaign)
     use_search = CATEGORIES[category]["web_search"]
     last_err = None
     for attempt in (1, 2):

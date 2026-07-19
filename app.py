@@ -6,6 +6,7 @@ import functools
 import hmac
 import logging
 import uuid
+from datetime import timedelta
 
 from flask import (
     Flask, abort, flash, jsonify, redirect, render_template, request,
@@ -18,7 +19,7 @@ from db import SessionLocal, init_db
 from generator import CATEGORIES, describe_photo, generate_post
 from imagegen import prepare_photo, render_card
 from learning import distill_lesson
-from models import Lesson, Photo, Post, Publication, utcnow
+from models import Campaign, Lesson, Photo, Post, Publication, utcnow
 from publisher import PLATFORMS, PLATFORM_LABELS, get_publisher
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -143,6 +144,99 @@ def _record_correction(kind, post, before, after=None, note=None):
         app.logger.exception("Lesson distillation failed (%s, post %s)", kind, post.id)
 
 
+# ---------------------------------------------------------------- campaigns
+
+CAMPAIGN_PRESETS = {
+    "book": {
+        "label": "Promote the book",
+        "instruction": (
+            'Dr. Ike is promoting his book, "Dr. Ike\'s Triangle of Leadership:'
+            ' How to Attract, Move, and Scale People". Lean on the book\'s ideas'
+            " and signature lines, mention the book by name when it fits, and"
+            " where natural close with a soft invitation to grab a copy."
+        ),
+    },
+    "speaking": {
+        "label": "Promote speaking, coaching & consulting",
+        "instruction": (
+            "Dr. Ike is booking speaking engagements, leadership coaching, and"
+            " advisory/consulting work through Iroko Lifesciences Advisory."
+            " Where natural, close with an invitation to bring him in to speak"
+            " at an event, or to work with him on leadership or biopharma"
+            " strategy (his LinkedIn profile is the way to reach him)."
+        ),
+    },
+}
+
+CAMPAIGN_DURATIONS = {7: "1 week", 14: "2 weeks", 30: "1 month", 60: "2 months"}
+
+
+def _current_campaign():
+    """The most recent campaign that hasn't been ended early, if any.
+    (It may already be past its end date — callers check is_active.)"""
+    return (
+        SessionLocal().query(Campaign)
+        .filter(Campaign.ended_at.is_(None))
+        .order_by(Campaign.starts_at.desc())
+        .first()
+    )
+
+
+def _active_campaign_instruction() -> str | None:
+    campaign = _current_campaign()
+    return campaign.instruction if campaign and campaign.is_active else None
+
+
+@app.post("/campaign/start")
+@login_required
+def start_campaign():
+    kind = request.form.get("kind", "")
+    try:
+        days = int(request.form.get("days", "30"))
+    except ValueError:
+        days = 30
+    days = days if days in CAMPAIGN_DURATIONS else 30
+
+    if kind in CAMPAIGN_PRESETS:
+        label = CAMPAIGN_PRESETS[kind]["label"]
+        instruction = CAMPAIGN_PRESETS[kind]["instruction"]
+    elif kind == "custom":
+        custom = (request.form.get("custom") or "").strip()
+        if not custom:
+            flash("Describe the custom focus first.", "error")
+            return redirect(url_for("dashboard"))
+        label = custom if len(custom) <= 80 else custom[:77] + "…"
+        instruction = custom
+    else:
+        flash("Pick a posting focus first.", "error")
+        return redirect(url_for("dashboard"))
+
+    session = SessionLocal()
+    session.query(Campaign).filter(Campaign.ended_at.is_(None)).update(
+        {"ended_at": utcnow()}
+    )
+    campaign = Campaign(kind=kind, label=label, instruction=instruction,
+                        ends_at=utcnow() + timedelta(days=days))
+    session.add(campaign)
+    session.commit()
+    flash(f'Posting focus set: "{label}" for {CAMPAIGN_DURATIONS[days]}. '
+          "Every new post will carry it until it ends.", "ok")
+    return redirect(url_for("dashboard"))
+
+
+@app.post("/campaign/end")
+@login_required
+def end_campaign():
+    session = SessionLocal()
+    ended = session.query(Campaign).filter(Campaign.ended_at.is_(None)).update(
+        {"ended_at": utcnow()}
+    )
+    session.commit()
+    flash("Posting focus ended — new posts go back to the normal mix."
+          if ended else "No posting focus was running.", "ok")
+    return redirect(url_for("dashboard"))
+
+
 # ---------------------------------------------------------------- generation
 
 def _available_photos():
@@ -170,6 +264,7 @@ def _create_pending_post(category, source_theme=None, post_group_id=None,
         lessons=_active_lessons(category),
         top_performers=_top_performers(category),
         photos=[(i, p.description) for i, p in enumerate(photos)],
+        campaign=_active_campaign_instruction(),
     )
     post_id = str(uuid.uuid4())
 
@@ -363,6 +458,7 @@ def dashboard():
     photos = (
         session.query(Photo).order_by(Photo.created_at.desc()).limit(60).all()
     )
+    campaign = _current_campaign()
     return render_template(
         "dashboard.html",
         pending_by_platform={
@@ -376,6 +472,10 @@ def dashboard():
         categories=CATEGORIES,
         daily_count=len(CATEGORIES),
         today=utcnow().strftime("%A, %B %-d"),
+        campaign=campaign if campaign and campaign.is_active else None,
+        expired_campaign=campaign if campaign and not campaign.is_active else None,
+        campaign_presets=CAMPAIGN_PRESETS,
+        campaign_durations=CAMPAIGN_DURATIONS,
     )
 
 

@@ -554,3 +554,68 @@ textarea.hashtags-box { min-height: 0; }
 .btn-x:hover { color: #b3372f; }
 
 .lessons-hint { margin-top: .9rem; margin-bottom: 0; font-size: .82rem; }
+
+/* ---- posting focus (campaigns) ---- */
+
+.campaign-row {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  flex-wrap: wrap;
+}
+
+.campaign-badge {
+  display: inline-block;
+  background: var(--color-blue);
+  color: var(--color-white);
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: .18rem .55rem;
+  border-radius: 999px;
+}
+
+.campaign-label { font-size: 1.05rem; }
+
+.campaign-meta { margin: .5rem 0 .75rem; }
+
+.campaign-instruction {
+  background: var(--color-blue-soft);
+  border-radius: var(--radius-sm);
+  padding: .7rem .9rem;
+  font-size: .88rem;
+  margin-bottom: 1rem;
+}
+
+.campaign-choices {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+  margin-bottom: .9rem;
+}
+
+.campaign-choice {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  font-size: .95rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.campaign-choice input { accent-color: var(--color-blue); }
+
+.campaign-form input[type="text"] { margin-bottom: .9rem; }
+
+.campaign-for { color: var(--color-gray); font-size: .9rem; }
+
+.campaign-form select {
+  font: inherit;
+  font-size: .95rem;
+  padding: .45rem .6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-white);
+  color: var(--color-ink);
+}

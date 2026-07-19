@@ -1,4 +1,5 @@
 """SQLAlchemy models: posts, per-platform publications, and ig_credentials."""
+import math
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -104,6 +105,34 @@ class Photo(Base):
     post_id = Column(String(36), nullable=True)      # draft/post currently holding it
     created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
     used_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class Campaign(Base):
+    """A time-boxed posting focus (e.g. promote the book for a month).
+    While one is active its instruction is woven into every generated post;
+    it expires on its own when ends_at passes, or when ended early."""
+
+    __tablename__ = "campaigns"
+
+    id = Column(String(36), primary_key=True, default=new_uuid)
+    kind = Column(String(20), nullable=False)      # book | speaking | custom
+    label = Column(String(120), nullable=False)    # shown on the dashboard
+    instruction = Column(Text, nullable=False)     # injected into generation prompts
+    starts_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+    ends_at = Column(DateTime(timezone=True), nullable=False)
+    ended_at = Column(DateTime(timezone=True), nullable=True)  # set if ended early
+
+    def _ends(self) -> datetime:
+        # SQLite returns naive datetimes; everything here is stored as UTC
+        return self.ends_at if self.ends_at.tzinfo else self.ends_at.replace(tzinfo=timezone.utc)
+
+    @property
+    def days_left(self) -> int:
+        return max(0, math.ceil((self._ends() - utcnow()).total_seconds() / 86400))
+
+    @property
+    def is_active(self) -> bool:
+        return self.ended_at is None and self._ends() > utcnow()
 
 
 class Lesson(Base):
