@@ -367,6 +367,33 @@ def generate_post(category: str, source_theme: str | None = None,
     raise RuntimeError(f"Claude did not return valid post JSON after 2 attempts: {last_err}")
 
 
+def pick_photo(caption: str, photos: list[tuple[int, str]]) -> int | None:
+    """One cheap call: which library photo goes best with this caption?
+    Returns the photo index, or None if Claude's answer is unusable."""
+    lines = "\n".join(f"{i}. {desc}" for i, desc in photos)
+    client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY or None)
+    response = client.messages.create(
+        model=config.ANTHROPIC_MODEL,
+        max_tokens=50,
+        messages=[{
+            "role": "user",
+            "content": (
+                "A social post needs a photo. Pick the single photo whose"
+                " content and mood best match the post — there is always a"
+                " best match; do not decline.\n\nPOST CAPTION:\n" + caption +
+                "\n\nPHOTOS:\n" + lines +
+                '\n\nReply with ONLY this JSON: {"photo": <number>}'
+            ),
+        }],
+    )
+    text = "".join(b.text for b in response.content if b.type == "text")
+    start, end = text.find("{"), text.rfind("}")
+    if start == -1 or end <= start:
+        return None
+    choice = json.loads(text[start:end + 1]).get("photo")
+    return choice if isinstance(choice, int) and not isinstance(choice, bool) else None
+
+
 def describe_photo(image_path: str) -> str:
     """One vision call at upload time: a short description used to match the
     photo to future posts."""

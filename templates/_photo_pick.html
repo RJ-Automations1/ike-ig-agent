@@ -1,0 +1,32 @@
+<details class="photo-pick">
+  <summary>Include photo</summary>
+  <div class="photo-pick-body">
+    <div class="photo-pick-actions">
+      <button class="btn btn-secondary" name="auto" value="1"
+              formaction="{{ url_for('set_photo', post_id=post.id) }}">
+        Auto-match the best photo
+      </button>
+      {% if post.id in posts_with_photo %}
+      <button class="btn btn-ghost" name="remove" value="1"
+              formaction="{{ url_for('set_photo', post_id=post.id) }}">
+        Remove photo
+      </button>
+      {% endif %}
+    </div>
+    {% if library_photos %}
+    <p class="meta photo-pick-hint">Or pick one yourself:</p>
+    <div class="photo-pick-grid">
+      {% for photo in library_photos %}
+      <button class="photo-pick-thumb" name="photo_id" value="{{ photo.id }}"
+              formaction="{{ url_for('set_photo', post_id=post.id) }}"
+              title="{{ photo.description }}">
+        <img src="{{ url_for('static', filename='media/' ~ photo.filename) }}"
+             alt="{{ photo.description }}">
+      </button>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="meta photo-pick-hint">The library is empty — add photos to pick from them.</p>
+    {% endif %}
+  </div>
+</details>

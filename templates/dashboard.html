@@ -151,6 +151,8 @@
             <label for="hashtags-{{ post.id }}">Hashtags</label>
             <textarea id="hashtags-{{ post.id }}" name="hashtags" class="hashtags-box">{{ post.hashtags }}</textarea>
 
+            {% include "_photo_pick.html" %}
+
             <label for="note-{{ post.id }}" class="redo-note">Note for redo (optional)</label>
             <input type="text" id="note-{{ post.id }}" name="note"
                    placeholder="e.g. make it about mentorship">

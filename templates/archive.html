@@ -47,6 +47,8 @@
             <label for="hashtags-{{ post.id }}">Hashtags</label>
             <textarea id="hashtags-{{ post.id }}" name="hashtags" class="hashtags-box">{{ post.hashtags }}</textarea>
 
+            {% include "_photo_pick.html" %}
+
             <div class="actions">
               <button class="btn btn-primary"
                       formaction="{{ url_for('publish', post_id=post.id) }}"

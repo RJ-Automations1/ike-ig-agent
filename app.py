@@ -19,7 +19,7 @@ from sqlalchemy import func
 import analytics
 import config
 from db import SessionLocal, init_db
-from generator import CATEGORIES, describe_photo, generate_post
+from generator import CATEGORIES, describe_photo, generate_post, pick_photo
 from imagegen import prepare_photo, render_card
 from learning import distill_lesson
 from models import Campaign, Lesson, Photo, Post, Publication, utcnow
@@ -514,6 +514,9 @@ def dashboard():
         expired_campaign=campaign if campaign and not campaign.is_active else None,
         campaign_presets=CAMPAIGN_PRESETS,
         campaign_durations=CAMPAIGN_DURATIONS,
+        library_photos=_available_photos(),
+        posts_with_photo={p.post_id for p in
+                          session.query(Photo).filter_by(status="reserved")},
     )
 
 
@@ -551,6 +554,9 @@ def archive():
         platform_labels=PLATFORM_LABELS,
         categories=CATEGORIES,
         today=utcnow().strftime("%A, %B %-d"),
+        library_photos=_available_photos(),
+        posts_with_photo={p.post_id for p in
+                          session.query(Photo).filter_by(status="reserved")},
     )
 
 
@@ -736,6 +742,57 @@ def publish(post_id):
     else:
         _retire_photos(session, post)   # a published photo is used exactly once
         flash(f"Published to {label}.", "ok")
+    return _back()
+
+
+@app.post("/post/<post_id>/photo")
+@login_required
+def set_photo(post_id):
+    """Attach a library photo to a draft (chosen or auto-matched), swap it,
+    or remove it and fall back to the branded quote card."""
+    session = SessionLocal()
+    post = _get_post_or_404(post_id)
+    if post.status not in ("pending", "saved"):
+        flash("That post was already actioned.", "error")
+        return _back()
+    _apply_edits(session, post)  # keep any caption edits made before clicking
+
+    if request.form.get("remove"):
+        _release_photos(session, post)
+        filename = f"{post.id}.jpg"
+        path = config.MEDIA_DIR / filename
+        if not path.exists():  # post was born with a photo — render its card now
+            render_card(post.image_text, str(path))
+        post.image_url = f"{config.APP_BASE_URL}/static/media/{filename}"
+        session.commit()
+        flash("Photo removed — this post uses the branded quote card.", "ok")
+        return _back()
+
+    if request.form.get("photo_id"):
+        photo = session.get(Photo, request.form["photo_id"])
+        if photo is None or photo.status != "available":
+            flash("That photo isn't available anymore.", "error")
+            return _back()
+    else:  # auto-match the best-fitting photo
+        photos = _available_photos()
+        if not photos:
+            flash("No photos in the library yet — add some first.", "error")
+            return _back()
+        try:
+            choice = pick_photo(post.caption,
+                                [(i, p.description) for i, p in enumerate(photos)])
+        except Exception as e:
+            app.logger.exception("Photo auto-match failed for %s", post.id)
+            flash(f"Auto-match failed: {e}", "error")
+            return _back()
+        photo = photos[choice] if choice is not None and 0 <= choice < len(photos) else photos[0]
+
+    _release_photos(session, post)  # swap: any current photo returns to the library
+    photo.status = "reserved"
+    photo.post_id = post.id
+    post.image_url = f"{config.APP_BASE_URL}/static/media/{photo.filename}"
+    session.commit()
+    flash("Photo attached to this post.", "ok")
     return _back()
 
 
