@@ -1,5 +1,31 @@
 /* Design tokens extracted from drikeadvisory.com (Astro build, Feb 2026 stylesheet).
    If the site is redesigned, refresh these values from its :root variables. */
+
+/* Brand fonts, self-hosted so they load on any network (no Google Fonts
+   dependency). Typography mirrors the site: headings are Inter bold with
+   tight tracking; Fraunces appears as blue italic accent words (.accent). */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("fonts/inter-var.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Fraunces";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/fraunces-italic-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Fraunces";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("fonts/fraunces-600.woff2") format("woff2");
+}
+
 :root {
   --color-ink: #0a1428;
   --color-ink-soft: #14213d;
@@ -52,8 +78,9 @@ body {
   border-radius: 50%;
   background: var(--color-ink);
   color: var(--color-white);
-  font-family: var(--font-serif);
-  font-size: 1.15rem;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 1.05rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -61,10 +88,11 @@ body {
 }
 
 .wordmark {
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
+  font-weight: 700;
   font-size: 1.05rem;
   color: var(--color-ink);
-  letter-spacing: .01em;
+  letter-spacing: -.02em;
 }
 
 .wordmark small {
@@ -87,11 +115,21 @@ body {
 .card-body { padding: 1.75rem; }
 
 h1 {
-  font-family: var(--font-serif);
-  font-weight: 600;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  letter-spacing: -.025em;
   font-size: 1.6rem;
   line-height: 1.2;
   margin: 0 0 .35rem;
+}
+
+/* the site's signature: a serif italic accent word inside a bold sans heading */
+.accent {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
+  color: var(--color-blue);
+  letter-spacing: -.01em;
 }
 
 .eyebrow {
@@ -295,7 +333,9 @@ textarea.hashtags-box { min-height: 0; }
 
 .options-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  /* auto-fill (not auto-fit) so a lone card keeps its column width
+     instead of stretching across the whole row */
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 1.5rem;
   align-items: start;
   margin-bottom: 2rem;
@@ -343,8 +383,9 @@ textarea.hashtags-box { min-height: 0; }
 }
 
 .history-head {
-  font-family: var(--font-serif);
-  font-weight: 600;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  letter-spacing: -.02em;
   font-size: 1.2rem;
   margin: 2.5rem 0 1rem;
 }
@@ -644,9 +685,10 @@ textarea.hashtags-box { min-height: 0; }
 }
 
 .setup-head {
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 1.2rem;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: -.02em;
   margin: 0 0 .9rem;
 }
 
@@ -661,3 +703,17 @@ textarea.hashtags-box { min-height: 0; }
   font-size: .85rem;
   white-space: nowrap;
 }
+
+/* ---- saved posts + manual rules ---- */
+
+.saved-hint { margin: -0.75rem 0 1.25rem; }
+
+.lesson-add {
+  display: flex;
+  gap: .6rem;
+  margin-bottom: 1.1rem;
+}
+
+.lesson-add input[type="text"] { flex: 1; margin: 0; }
+
+.lesson-add .btn { white-space: nowrap; }
