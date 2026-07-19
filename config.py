@@ -51,6 +51,9 @@ FB_APP_SECRET = os.getenv("FB_APP_SECRET", "")
 
 # Paths
 MEDIA_DIR = BASE_DIR / "static" / "media"
+# optional: every dashboard photo upload is also copied here, untouched
+_backup = os.getenv("PHOTOS_BACKUP_DIR", "").strip()
+PHOTOS_BACKUP_DIR = Path(_backup) if _backup else None
 FONT_DIR = BASE_DIR / "static" / "fonts"
 SAMPLE_POSTS_FILE = BASE_DIR / "sample_posts.txt"       # his real LinkedIn posts
 BOOK_QUOTES_FILE = BASE_DIR / "book_quotes.txt"         # signature lines from his book

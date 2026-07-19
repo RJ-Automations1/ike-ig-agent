@@ -4,9 +4,11 @@ change, or redo — each publishing to its own platform. An Archive tab shows
 everything published, with Instagram analytics per post."""
 import functools
 import hmac
+import io
 import logging
 import uuid
 from datetime import timedelta
+from pathlib import Path
 
 from flask import (
     Flask, abort, flash, jsonify, redirect, render_template, request,
@@ -382,6 +384,23 @@ def generate():
     }), (201 if created or not errors else 500)
 
 
+def _backup_original(file, data: bytes) -> None:
+    """Copy the untouched upload into PHOTOS_BACKUP_DIR (Vernon's own photo
+    archive). Never let a backup problem break the upload itself."""
+    if config.PHOTOS_BACKUP_DIR is None:
+        return
+    try:
+        config.PHOTOS_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+        name = Path(file.filename).name or "photo"
+        target = config.PHOTOS_BACKUP_DIR / name
+        if target.exists():
+            stem, suffix = target.stem, target.suffix
+            target = target.with_name(f"{stem}-{uuid.uuid4().hex[:8]}{suffix}")
+        target.write_bytes(data)
+    except Exception:
+        app.logger.exception("Backing up %s to the photos folder failed", file.filename)
+
+
 @app.post("/photos/upload")
 @login_required
 def upload_photos():
@@ -396,7 +415,9 @@ def upload_photos():
         filename = f"{uuid.uuid4()}.jpg"
         path = config.MEDIA_DIR / filename
         try:
-            prepare_photo(file.stream, str(path))
+            data = file.read()
+            _backup_original(file, data)
+            prepare_photo(io.BytesIO(data), str(path))
             description = describe_photo(str(path))
             session.add(Photo(filename=filename, description=description))
             session.commit()
