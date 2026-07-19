@@ -225,10 +225,12 @@ def _build_prompt(category: str, source_theme: str | None,
         lines = "\n".join(f"{i}. {desc}" for i, desc in photos)
         task += (
             "\n\nPHOTO LIBRARY — Dr. Ike's available photos:\n" + lines +
-            "\n\nIf one of these photos GENUINELY fits the post you're writing,"
-            " set \"photo\" to its number and reference the moment naturally in"
-            " the caption. If none fits, set \"photo\" to null and a branded"
-            " quote card will be used instead. Never force a fit."
+            "\n\nDr. Ike wants his REAL photos carrying most of his posts."
+            " Choose the photo that best complements this post, set \"photo\""
+            " to its number, and write the caption so the photo feels natural"
+            " (the image_text field is still required as alt text). Only set"
+            " \"photo\" to null when none of them could work at all — the"
+            " branded quote card is the fallback, not the default."
         )
     else:
         task += "\n\n(No photos available — set \"photo\" to null.)"

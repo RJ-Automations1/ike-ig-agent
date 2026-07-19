@@ -20,17 +20,15 @@
       {% endfor %}
     {% endwith %}
 
-    <div class="duo-grid">
-    <div>
-    <h2 class="history-head">Photo library</h2>
-    <div class="card">
-      <div class="card-body">
+    <div class="card setup-card">
+      <div class="setup-grid">
+      <section class="setup-cell">
+        <h2 class="setup-head">Photo library</h2>
         <form method="post" action="{{ url_for('upload_photos') }}"
               enctype="multipart/form-data" class="upload-form">
           <div class="upload-intro">
-            <p class="meta">Upload photos and the agent weaves them into generated posts
-              when one fits the story. Photos stay tucked away here; each is used
-              once, then retired.</p>
+            <p class="meta">Upload photos and the agent weaves them into generated posts.
+              Photos stay tucked away here; each is used once, then retired.</p>
           </div>
           <input type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple required>
           <button class="btn btn-primary"
@@ -47,14 +45,10 @@
           No photos in the library yet.
           {% endif %}
         </p>
-      </div>
-    </div>
-    </div>
+      </section>
 
-    <div>
-    <h2 class="history-head">Posting focus</h2>
-    <div class="card">
-      <div class="card-body">
+      <section class="setup-cell">
+        <h2 class="setup-head">Posting focus</h2>
         {% if campaign %}
         <div class="campaign-active">
           <div class="campaign-row">
@@ -114,9 +108,8 @@
           </div>
         </form>
         {% endif %}
+      </section>
       </div>
-    </div>
-    </div>
     </div>
 
     <div class="section-head">

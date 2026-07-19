@@ -625,17 +625,29 @@ textarea.hashtags-box { min-height: 0; }
   color: var(--color-ink);
 }
 
-/* ---- photo library + posting focus, side by side ---- */
+/* ---- photo library + posting focus: one card, two halves ---- */
 
-.duo-grid {
+.setup-card { margin: .5rem 0 0; }
+
+.setup-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0 1.5rem;
-  align-items: start;
 }
 
+.setup-cell { padding: 1.75rem; min-width: 0; }
+
+.setup-cell + .setup-cell { border-left: 1px solid var(--color-border); }
+
 @media (max-width: 880px) {
-  .duo-grid { grid-template-columns: 1fr; }
+  .setup-grid { grid-template-columns: 1fr; }
+  .setup-cell + .setup-cell { border-left: 0; border-top: 1px solid var(--color-border); }
+}
+
+.setup-head {
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0 0 .9rem;
 }
 
 .photo-counts { margin: .9rem 0 0; font-size: .82rem; }
