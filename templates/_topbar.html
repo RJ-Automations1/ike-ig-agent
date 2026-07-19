@@ -9,6 +9,12 @@
   </nav>
   <div class="topbar-right">
     {% if today %}<span class="meta today">{{ today }}</span>{% endif %}
+    <form method="post" action="{{ url_for('generate_batch') }}" class="topbar-generate">
+      <button class="btn btn-primary"
+              onclick="this.disabled=true;this.textContent='Generating…';this.form.submit();">
+        Generate all posts
+      </button>
+    </form>
     <a class="btn btn-ghost" href="{{ url_for('logout') }}">Log out</a>
   </div>
 </header>

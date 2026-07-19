@@ -12,6 +12,7 @@ from flask import (
     Flask, abort, flash, jsonify, redirect, render_template, request,
     session as web_session, url_for,
 )
+from sqlalchemy import func
 
 import analytics
 import config
@@ -441,6 +442,8 @@ def generate_batch():
         flash(f"Generated {len(created)} new option{'s' if len(created) != 1 else ''}.", "ok")
     if errors:
         flash(f"Generation failed: {errors[0]}", "error")
+    if not created and not errors:
+        flash("All of today's options are already waiting below.", "ok")
     return redirect(url_for("dashboard"))
 
 
@@ -455,9 +458,11 @@ def dashboard():
     lessons = (
         session.query(Lesson).order_by(Lesson.created_at.desc()).limit(20).all()
     )
-    photos = (
-        session.query(Photo).order_by(Photo.created_at.desc()).limit(60).all()
-    )
+    # photos are hidden by design — the dashboard only shows how many there are
+    counts = dict(session.query(Photo.status, func.count()).group_by(Photo.status).all())
+    photo_counts = {status: counts.get(status, 0)
+                    for status in ("available", "reserved", "used")}
+    photo_counts["total"] = sum(photo_counts.values())
     campaign = _current_campaign()
     return render_template(
         "dashboard.html",
@@ -467,7 +472,7 @@ def dashboard():
         },
         pending_total=len(pending),
         lessons=lessons,
-        photos=photos,
+        photo_counts=photo_counts,
         platform_labels=PLATFORM_LABELS,
         categories=CATEGORIES,
         daily_count=len(CATEGORIES),

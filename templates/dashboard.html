@@ -20,6 +20,8 @@
       {% endfor %}
     {% endwith %}
 
+    <div class="duo-grid">
+    <div>
     <h2 class="history-head">Photo library</h2>
     <div class="card">
       <div class="card-body">
@@ -27,7 +29,8 @@
               enctype="multipart/form-data" class="upload-form">
           <div class="upload-intro">
             <p class="meta">Upload photos and the agent weaves them into generated posts
-              when one fits the story. Each photo is used once, then retired.</p>
+              when one fits the story. Photos stay tucked away here; each is used
+              once, then retired.</p>
           </div>
           <input type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple required>
           <button class="btn btn-primary"
@@ -35,28 +38,20 @@
             Add to library
           </button>
         </form>
-
-        {% if photos %}
-        <div class="photo-grid">
-          {% for photo in photos %}
-          <div class="photo-tile" title="{{ photo.description }}">
-            <img src="{{ url_for('static', filename='media/' ~ photo.filename) }}" alt="{{ photo.description }}">
-            <span class="photo-badge {{ photo.status }}">
-              {{ {'available': 'Ready', 'reserved': 'In a draft', 'used': 'Used'}[photo.status] }}
-            </span>
-            {% if photo.status == 'available' %}
-            <form method="post" action="{{ url_for('delete_photo', photo_id=photo.id) }}">
-              <button class="photo-x" title="Remove from library"
-                      onclick="return confirm('Remove this photo from the library?');">✕</button>
-            </form>
-            {% endif %}
-          </div>
-          {% endfor %}
-        </div>
-        {% endif %}
+        <p class="meta photo-counts">
+          {% if photo_counts.total %}
+          In the library: {{ photo_counts.available }} ready
+          · {{ photo_counts.reserved }} in drafts
+          · {{ photo_counts.used }} used
+          {% else %}
+          No photos in the library yet.
+          {% endif %}
+        </p>
       </div>
     </div>
+    </div>
 
+    <div>
     <h2 class="history-head">Posting focus</h2>
     <div class="card">
       <div class="card-body">
@@ -120,6 +115,8 @@
         </form>
         {% endif %}
       </div>
+    </div>
+    </div>
     </div>
 
     <div class="section-head">

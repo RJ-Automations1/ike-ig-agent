@@ -602,6 +602,11 @@ textarea.hashtags-box { min-height: 0; }
   font-size: .95rem;
   font-weight: 500;
   cursor: pointer;
+  /* undo the global uppercase label treatment — these are choices, not field labels */
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--color-ink);
+  margin: 0;
 }
 
 .campaign-choice input { accent-color: var(--color-blue); }
@@ -618,4 +623,29 @@ textarea.hashtags-box { min-height: 0; }
   border-radius: var(--radius-sm);
   background: var(--color-white);
   color: var(--color-ink);
+}
+
+/* ---- photo library + posting focus, side by side ---- */
+
+.duo-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 880px) {
+  .duo-grid { grid-template-columns: 1fr; }
+}
+
+.photo-counts { margin: .9rem 0 0; font-size: .82rem; }
+
+/* ---- generate-all button in the topbar ---- */
+
+.topbar-generate { margin: 0; }
+
+.topbar-generate .btn {
+  padding: .45rem .95rem;
+  font-size: .85rem;
+  white-space: nowrap;
 }
