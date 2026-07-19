@@ -326,6 +326,17 @@ def _pending_posts():
     )
 
 
+def _saved_posts():
+    """Drafts Dr. Ike set aside — they keep their slot-free life until he
+    publishes or removes them."""
+    return (
+        SessionLocal().query(Post)
+        .filter_by(status="saved")
+        .order_by(Post.created_at.desc())
+        .all()
+    )
+
+
 def _retire_legacy_drafts():
     """Pending drafts from a category set that no longer exists are rejected
     (their photos released) so the dashboard only shows current slots."""
@@ -349,7 +360,8 @@ def _top_up_options(theme=None):
     covered = {p.category for p in pending}
     # photo posts don't occupy a category slot
     missing = [c for c in CATEGORIES if c not in covered]
-    avoid = [p.caption for p in pending]
+    # saved drafts don't hold a slot, but new options should still differ from them
+    avoid = [p.caption for p in pending] + [p.caption for p in _saved_posts()]
     created, errors = [], []
     for category in missing:
         try:
@@ -492,6 +504,7 @@ def dashboard():
             for platform in PLATFORMS
         },
         pending_total=len(pending),
+        saved_posts=_saved_posts(),
         lessons=lessons,
         photo_counts=photo_counts,
         platform_labels=PLATFORM_LABELS,
@@ -555,7 +568,7 @@ def _post_text(caption, hashtags) -> str:
 def _apply_edits(session, post) -> str | None:
     """Apply form edits. Returns the pre-edit text if something changed."""
     caption = (request.form.get("caption") or "").strip()
-    if post.status != "pending" or not caption:
+    if post.status not in ("pending", "saved") or not caption:
         return None
     hashtags = (request.form.get("hashtags") or "").strip()
     before = _post_text(post.caption, post.hashtags)
@@ -572,7 +585,7 @@ def _apply_edits(session, post) -> str | None:
 def save(post_id):
     session = SessionLocal()
     post = _get_post_or_404(post_id)
-    if post.status != "pending":
+    if post.status not in ("pending", "saved"):
         flash("That post was already actioned.", "error")
     else:
         before = _apply_edits(session, post)
@@ -580,6 +593,45 @@ def save(post_id):
         if before:
             _record_correction("edit", post, before,
                                after=_post_text(post.caption, post.hashtags))
+    return redirect(url_for("dashboard"))
+
+
+@app.post("/post/<post_id>/save-later")
+@login_required
+def save_later(post_id):
+    session = SessionLocal()
+    post = _get_post_or_404(post_id)
+    _apply_edits(session, post)  # keep any edits he made before setting it aside
+    claimed = (
+        session.query(Post)
+        .filter_by(id=post.id, status="pending")
+        .update({"status": "saved"})
+    )
+    session.commit()
+    if claimed:
+        flash("Saved for later — it stays below until you publish or remove it, "
+              "and a fresh option can take its slot.", "ok")
+    else:
+        flash("That post was already actioned.", "error")
+    return redirect(url_for("dashboard"))
+
+
+@app.post("/post/<post_id>/discard")
+@login_required
+def discard(post_id):
+    session = SessionLocal()
+    post = _get_post_or_404(post_id)
+    claimed = (
+        session.query(Post)
+        .filter_by(id=post.id, status="saved")
+        .update({"status": "rejected"})
+    )
+    session.commit()
+    if claimed:
+        _release_photos(session, post)  # its photo goes back to the library
+        flash("Removed from saved posts.", "ok")
+    else:
+        flash("That post was already actioned.", "error")
     return redirect(url_for("dashboard"))
 
 
@@ -636,11 +688,12 @@ def publish(post_id):
         _record_correction("edit", post, before,
                            after=_post_text(post.caption, post.hashtags))
 
-    # atomic claim: only one request can move pending -> publishing
+    # atomic claim: only one request can move pending/saved -> publishing
     claimed = (
         session.query(Post)
-        .filter_by(id=post.id, status="pending")
-        .update({"status": "publishing", "approved_at": utcnow()})
+        .filter(Post.id == post.id, Post.status.in_(("pending", "saved")))
+        .update({"status": "publishing", "approved_at": utcnow()},
+                synchronize_session=False)
     )
     session.commit()
     if not claimed:
@@ -680,6 +733,22 @@ def publish(post_id):
 
 
 # ---------------------------------------------------------------- lessons
+
+@app.post("/lessons/add")
+@login_required
+def add_lesson():
+    """Dr. Ike (or Vernon) writes a rule directly — it steers every new post,
+    same as the distilled ones."""
+    text = (request.form.get("text") or "").strip()
+    if not text:
+        flash("Write the rule first.", "error")
+    else:
+        session = SessionLocal()
+        session.add(Lesson(category=None, text=text[:400], source="manual"))
+        session.commit()
+        flash("Rule added — every new post will follow it.", "ok")
+    return redirect(url_for("dashboard"))
+
 
 @app.post("/lessons/<lesson_id>/delete")
 @login_required

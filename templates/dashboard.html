@@ -5,8 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Dashboard — Iroko Lifesciences Advisory</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='brand.css') }}">
 </head>
 <body>
@@ -23,7 +22,7 @@
     <div class="card setup-card">
       <div class="setup-grid">
       <section class="setup-cell">
-        <h2 class="setup-head">Photo library</h2>
+        <h2 class="setup-head">Photo <span class="accent">library</span></h2>
         <form method="post" action="{{ url_for('upload_photos') }}"
               enctype="multipart/form-data" class="upload-form">
           <div class="upload-intro">
@@ -48,7 +47,7 @@
       </section>
 
       <section class="setup-cell">
-        <h2 class="setup-head">Posting focus</h2>
+        <h2 class="setup-head">Posting <span class="accent">focus</span></h2>
         {% if campaign %}
         <div class="campaign-active">
           <div class="campaign-row">
@@ -113,7 +112,7 @@
     </div>
 
     <div class="section-head">
-      <h1>Today's post options</h1>
+      <h1>Today's post <span class="accent">options</span></h1>
       {% if pending_total < daily_count %}
       <form method="post" action="{{ url_for('generate_batch') }}">
         <button class="btn btn-secondary"
@@ -166,6 +165,10 @@
                       formaction="{{ url_for('save', post_id=post.id) }}">
                 Save changes
               </button>
+              <button class="btn btn-secondary"
+                      formaction="{{ url_for('save_later', post_id=post.id) }}">
+                Save for later
+              </button>
               <button class="btn btn-ghost"
                       formaction="{{ url_for('redo', post_id=post.id) }}"
                       onclick="return confirm('Discard this option and generate a new one?');">
@@ -186,9 +189,59 @@
     {% endif %}
     {% endfor %}
 
-    <h2 class="history-head">What the agent has learned</h2>
+    {% if saved_posts %}
+    <h2 class="history-head">Saved for <span class="accent">later</span></h2>
+    <p class="meta saved-hint">These drafts stay here as long as you like — edit and publish
+      whenever the moment is right.</p>
+    <div class="options-grid">
+      {% for post in saved_posts %}
+      <div class="card option-card {{ post.platform }}" id="post-{{ post.id }}">
+        <img class="post-image" src="{{ post.image_url }}" alt="Post image: {{ post.image_text }}">
+        <div class="card-body">
+          <div class="eyebrow">
+            {% if post.category in categories %}{{ categories[post.category].label }}{% else %}Saved post{% endif %}
+            · {{ platform_labels[post.platform] }}
+          </div>
+          <p class="meta">Drafted {{ post.created_at.strftime('%b %-d, %H:%M UTC') }}</p>
+
+          <form method="post">
+            <label for="caption-{{ post.id }}">Caption</label>
+            <textarea id="caption-{{ post.id }}" name="caption" required>{{ post.caption }}</textarea>
+
+            <label for="hashtags-{{ post.id }}">Hashtags</label>
+            <textarea id="hashtags-{{ post.id }}" name="hashtags" class="hashtags-box">{{ post.hashtags }}</textarea>
+
+            <div class="actions">
+              <button class="btn btn-primary"
+                      formaction="{{ url_for('publish', post_id=post.id) }}"
+                      onclick="return confirm('Publish this post to {{ platform_labels[post.platform] }}?');">
+                Publish to {{ platform_labels[post.platform] }}
+              </button>
+              <button class="btn btn-secondary"
+                      formaction="{{ url_for('save', post_id=post.id) }}">
+                Save changes
+              </button>
+              <button class="btn btn-ghost"
+                      formaction="{{ url_for('discard', post_id=post.id) }}"
+                      onclick="return confirm('Remove this saved post for good?');">
+                Remove
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <h2 class="history-head">What the agent has <span class="accent">learned</span></h2>
     <div class="card">
       <div class="card-body">
+        <form method="post" action="{{ url_for('add_lesson') }}" class="lesson-add">
+          <input type="text" name="text" required
+                 placeholder="Teach the agent a rule, e.g. always mention the book when career advice comes up">
+          <button class="btn btn-secondary">Add rule</button>
+        </form>
         {% if lessons %}
         <ul class="lessons">
           {% for lesson in lessons %}
@@ -196,7 +249,7 @@
             <span class="lesson-text">{{ lesson.text }}</span>
             <span class="lesson-meta">
               {{ categories[lesson.category].label if lesson.category in categories else 'All posts' }}
-              · from {{ 'an edit' if lesson.source == 'edit' else 'a redo note' }}
+              {% if lesson.source == 'edit' %}· from an edit{% elif lesson.source == 'redo' %}· from a redo note{% else %}· added by you{% endif %}
             </span>
             <form method="post" action="{{ url_for('delete_lesson', lesson_id=lesson.id) }}">
               <button class="btn-x" title="Forget this lesson"
@@ -205,9 +258,9 @@
           </li>
           {% endfor %}
         </ul>
-        <p class="meta lessons-hint">These rules were learned from Dr. Ike's edits and redo notes, and steer every new post. Delete any that are wrong.</p>
+        <p class="meta lessons-hint">These rules steer every new post — some the agent learned from Dr. Ike's edits and redo notes, some added by hand above. Delete any that are wrong.</p>
         {% else %}
-        <p class="meta lessons-hint">Nothing yet — when Dr. Ike edits a caption or redoes a post with a note, the agent distills durable preferences and lists them here.</p>
+        <p class="meta lessons-hint">Nothing yet — add a rule above, or let the agent distill preferences from Dr. Ike's edits and redo notes.</p>
         {% endif %}
       </div>
     </div>
