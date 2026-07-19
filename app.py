@@ -504,7 +504,6 @@ def dashboard():
             for platform in PLATFORMS
         },
         pending_total=len(pending),
-        saved_posts=_saved_posts(),
         lessons=lessons,
         photo_counts=photo_counts,
         platform_labels=PLATFORM_LABELS,
@@ -548,10 +547,18 @@ def archive():
     return render_template(
         "archive.html",
         posts=posts,
+        saved_posts=_saved_posts(),
         platform_labels=PLATFORM_LABELS,
         categories=CATEGORIES,
         today=utcnow().strftime("%A, %B %-d"),
     )
+
+
+def _back():
+    """Saved-post actions live on the Archive tab; everything else returns
+    to the dashboard."""
+    target = "archive" if request.form.get("return_to") == "archive" else "dashboard"
+    return redirect(url_for(target))
 
 
 def _get_post_or_404(post_id: str) -> Post:
@@ -593,7 +600,7 @@ def save(post_id):
         if before:
             _record_correction("edit", post, before,
                                after=_post_text(post.caption, post.hashtags))
-    return redirect(url_for("dashboard"))
+    return _back()
 
 
 @app.post("/post/<post_id>/save-later")
@@ -609,8 +616,8 @@ def save_later(post_id):
     )
     session.commit()
     if claimed:
-        flash("Saved for later — it stays below until you publish or remove it, "
-              "and a fresh option can take its slot.", "ok")
+        flash("Saved for later — find it any time under the Archive tab, "
+              "and a fresh option can take its slot here.", "ok")
     else:
         flash("That post was already actioned.", "error")
     return redirect(url_for("dashboard"))
@@ -632,7 +639,7 @@ def discard(post_id):
         flash("Removed from saved posts.", "ok")
     else:
         flash("That post was already actioned.", "error")
-    return redirect(url_for("dashboard"))
+    return _back()
 
 
 @app.post("/post/<post_id>/redo")
@@ -698,7 +705,7 @@ def publish(post_id):
     session.commit()
     if not claimed:
         flash("That post was already actioned.", "error")
-        return redirect(url_for("dashboard"))
+        return _back()
 
     session.refresh(post)
     pub = Publication(post_id=post.id, platform=platform)
@@ -729,7 +736,7 @@ def publish(post_id):
     else:
         _retire_photos(session, post)   # a published photo is used exactly once
         flash(f"Published to {label}.", "ok")
-    return redirect(url_for("dashboard"))
+    return _back()
 
 
 # ---------------------------------------------------------------- lessons

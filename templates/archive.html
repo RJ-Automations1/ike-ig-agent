@@ -24,6 +24,54 @@
       <span class="meta archive-count">{{ posts|length }} published post{{ 's' if posts|length != 1 }}</span>
     </div>
 
+    {% if saved_posts %}
+    <h2 class="history-head">Saved for <span class="accent">later</span></h2>
+    <p class="meta saved-hint">Drafts you set aside from the dashboard — edit and publish
+      whenever the moment is right.</p>
+    <div class="options-grid">
+      {% for post in saved_posts %}
+      <div class="card option-card {{ post.platform }}" id="post-{{ post.id }}">
+        <img class="post-image" src="{{ post.image_url }}" alt="Post image: {{ post.image_text }}">
+        <div class="card-body">
+          <div class="eyebrow">
+            {% if post.category in categories %}{{ categories[post.category].label }}{% else %}Saved post{% endif %}
+            · {{ platform_labels[post.platform] }}
+          </div>
+          <p class="meta">Drafted {{ post.created_at.strftime('%b %-d, %H:%M UTC') }}</p>
+
+          <form method="post">
+            <input type="hidden" name="return_to" value="archive">
+            <label for="caption-{{ post.id }}">Caption</label>
+            <textarea id="caption-{{ post.id }}" name="caption" required>{{ post.caption }}</textarea>
+
+            <label for="hashtags-{{ post.id }}">Hashtags</label>
+            <textarea id="hashtags-{{ post.id }}" name="hashtags" class="hashtags-box">{{ post.hashtags }}</textarea>
+
+            <div class="actions">
+              <button class="btn btn-primary"
+                      formaction="{{ url_for('publish', post_id=post.id) }}"
+                      onclick="return confirm('Publish this post to {{ platform_labels[post.platform] }}?');">
+                Publish to {{ platform_labels[post.platform] }}
+              </button>
+              <button class="btn btn-secondary"
+                      formaction="{{ url_for('save', post_id=post.id) }}">
+                Save changes
+              </button>
+              <button class="btn btn-ghost"
+                      formaction="{{ url_for('discard', post_id=post.id) }}"
+                      onclick="return confirm('Remove this saved post for good?');">
+                Remove
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <h2 class="history-head">Published</h2>
+    {% endif %}
+
     {% if posts %}
     <div class="archive-grid">
       {% for post in posts %}
@@ -74,5 +122,14 @@
     </div>
     {% endif %}
   </div>
+
+  <script>
+    // captions are always fully visible — the boxes grow with their content
+    document.querySelectorAll("textarea").forEach(function (t) {
+      var fit = function () { t.style.height = "auto"; t.style.height = (t.scrollHeight + 2) + "px"; };
+      t.addEventListener("input", fit);
+      fit();
+    });
+  </script>
 </body>
 </html>
