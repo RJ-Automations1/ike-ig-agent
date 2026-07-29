@@ -85,6 +85,8 @@ def refresh_publication(session, pub) -> bool:
     """Fetch fresh metrics for one publication. Returns True if updated."""
     if pub.status != "published":
         return False
+    if pub.metrics_source == "manual" and config.USE_MOCK_PUBLISHER:
+        return False  # never overwrite hand-entered real numbers with mock data
     if config.USE_MOCK_PUBLISHER:
         metrics = _mock_metrics(pub)
     elif pub.platform == "instagram":
@@ -104,7 +106,8 @@ def refresh_publication(session, pub) -> bool:
 
 
 def is_stale(pub) -> bool:
-    if pub.platform == "linkedin" and not config.USE_MOCK_PUBLISHER:
+    # only Instagram has an analytics API; LinkedIn and X are manual entry
+    if pub.platform != "instagram" and not config.USE_MOCK_PUBLISHER:
         return False
     if pub.metrics_updated_at is None:
         return True

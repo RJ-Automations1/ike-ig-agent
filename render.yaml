@@ -42,6 +42,11 @@ services:
         sync: false
       - key: DASHBOARD_PASSWORD
         sync: false
+      # client login for Dr. Ike's publicist + admin login (sees system health)
+      - key: ERICA_PASSWORD
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
       - key: USE_MOCK_PUBLISHER
         value: "true"
       # go-live credentials — add values in the Render dashboard when ready:
@@ -52,6 +57,9 @@ services:
       - key: LINKEDIN_ACCESS_TOKEN
         value: ""
       - key: LINKEDIN_AUTHOR_URN
+        value: ""
+      # YYYY-MM-DD the LinkedIn token lapses — the dashboard warns 14 days out
+      - key: LINKEDIN_TOKEN_EXPIRES
         value: ""
       - key: FB_APP_ID
         value: ""

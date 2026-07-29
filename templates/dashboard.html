@@ -19,31 +19,80 @@
       {% endfor %}
     {% endwith %}
 
+    {% if is_admin %}
+    {% for warning in health_warnings %}
+    <div class="notice notice-warn">{{ warning }}</div>
+    {% endfor %}
+
+    <div class="health-strip">
+      {% for item in health_items %}
+      <span class="health-item {{ 'warn' if item.warn }}">{{ item.text }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+
     <div class="card setup-card">
       <div class="setup-grid">
       <section class="setup-cell">
-        <h2 class="setup-head">Photo <span class="accent">library</span></h2>
+        <h2 class="setup-head">Data <span class="accent">library</span></h2>
+
+        <h3 class="library-sub">Photos</h3>
         <form method="post" action="{{ url_for('upload_photos') }}"
               enctype="multipart/form-data" class="upload-form">
           <div class="upload-intro">
             <p class="meta">Upload photos and the agent weaves them into generated posts.
-              Photos stay tucked away here; each is used once, then retired.</p>
+              Photos stay tucked away here; each is used once, then rests before returning.</p>
           </div>
           <input type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple required>
           <button class="btn btn-primary"
                   onclick="if(this.form.reportValidity()){this.disabled=true;this.textContent='Adding…';this.form.submit();}return false;">
-            Add to library
+            Add photos
           </button>
         </form>
         <p class="meta photo-counts">
           {% if photo_counts.total %}
-          In the library: {{ photo_counts.available }} ready
+          Photos: {{ photo_counts.available }} ready
           · {{ photo_counts.reserved }} in drafts
           · {{ photo_counts.used }} used
           {% else %}
           No photos in the library yet.
           {% endif %}
         </p>
+
+        <h3 class="library-sub">Articles, links &amp; PDFs</h3>
+        <p class="meta">Save material the agent should know — press features, articles,
+          documents. It draws on them when they fit, and the "Generate a post" box can
+          build on any of them directly.</p>
+        <form method="post" action="{{ url_for('add_document') }}"
+              enctype="multipart/form-data" class="doc-form">
+          <textarea name="doc_text" class="hashtags-box"
+                    placeholder="Paste an article, or just a link (https://…)"></textarea>
+          <div class="doc-row">
+            <input type="file" name="doc_file" accept="application/pdf">
+            <button class="btn btn-secondary"
+                    onclick="this.disabled=true;this.textContent='Reading…';this.form.submit();">
+              Add to library
+            </button>
+          </div>
+        </form>
+        {% if documents %}
+        <ul class="doc-list">
+          {% for doc in documents %}
+          <li>
+            <span class="doc-kind">{{ {'pdf': 'PDF', 'link': 'Link', 'text': 'Article'}[doc.kind] }}</span>
+            <span class="doc-title" title="{{ doc.summary }}">
+              {% if doc.url %}<a href="{{ doc.url }}" target="_blank" rel="noopener">{{ doc.title }}</a>
+              {% else %}{{ doc.title }}{% endif %}
+            </span>
+            <span class="doc-meta">{{ doc.created_at|et('%b %-d') }}</span>
+            <form method="post" action="{{ url_for('delete_document', doc_id=doc.id) }}">
+              <button class="btn-x" title="Remove from the library"
+                      onclick="return confirm('Remove this from the library?');">✕</button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
       </section>
 
       <section class="setup-cell">
@@ -56,8 +105,8 @@
           </div>
           <p class="meta campaign-meta">
             {{ campaign.days_left }} day{{ 's' if campaign.days_left != 1 }} left
-            · started {{ campaign.starts_at.strftime('%b %-d') }}
-            · ends {{ campaign.ends_at.strftime('%b %-d') }}
+            · started {{ campaign.starts_at|et('%b %-d') }}
+            · ends {{ campaign.ends_at|et('%b %-d') }}
           </p>
           <p class="meta campaign-instruction">{{ campaign.instruction }}</p>
           <div class="actions">
@@ -73,7 +122,7 @@
         {% if expired_campaign %}
         <div class="notice">
           The "{{ expired_campaign.label }}" focus ran its course and ended
-          {{ expired_campaign.ends_at.strftime('%b %-d') }} — posts are back to the normal mix.
+          {{ expired_campaign.ends_at|et('%b %-d') }} — posts are back to the normal mix.
         </div>
         {% endif %}
         <p class="meta">Point every new post at one goal for a set stretch of time,
@@ -111,6 +160,35 @@
       </div>
     </div>
 
+    <div class="card custom-card">
+      <div class="card-body">
+        <h2 class="setup-head">Generate <span class="accent">a post</span></h2>
+        <p class="meta custom-intro">Have something specific — a press feature, an event flyer,
+          an announcement, a photo? Drop it here and the agent writes one post for each platform
+          in Dr. Ike's voice. They land with today's options below, ready to edit and publish.</p>
+        <form method="post" action="{{ url_for('custom_generate') }}"
+              enctype="multipart/form-data" class="custom-form">
+          <textarea name="source_text" class="custom-text"
+                    placeholder="Paste the text, a link, or a few notes about what this is and what the post should do…"></textarea>
+          {% if documents %}
+          <select name="document_id" class="custom-doc-pick">
+            <option value="">…or start from something in the library</option>
+            {% for doc in documents %}
+            <option value="{{ doc.id }}">{{ doc.title }}</option>
+            {% endfor %}
+          </select>
+          {% endif %}
+          <div class="custom-row">
+            <input type="file" name="source_image" accept="image/jpeg,image/png,image/webp">
+            <button class="btn btn-primary"
+                    onclick="this.disabled=true;this.textContent='Writing posts… (about a minute)';this.form.submit();">
+              Write posts for all 3 platforms
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <div class="section-head">
       <h1>Today's post <span class="accent">options</span></h1>
       {% if pending_total < daily_count %}
@@ -126,7 +204,8 @@
     {% for platform, posts in pending_by_platform.items() %}
     <div class="platform-head">
       <span class="platform-badge {{ platform }}">{{ platform_labels[platform] }}</span>
-      <span class="platform-count">{{ posts|length }} of 3 options waiting</span>
+      <span class="platform-count">{{ daily_counts[platform] }} of {{ platform_expected[platform] }} options
+        waiting{% if custom_counts[platform] %} · {{ custom_counts[platform] }} custom{% endif %}</span>
     </div>
 
     {% if posts %}
@@ -139,17 +218,34 @@
             {% if post.category in categories %}{{ categories[post.category].label }}{% else %}Option {{ loop.index }}{% endif %}
           </div>
           <p class="meta">
-            Drafted {{ post.created_at.strftime('%b %-d, %H:%M UTC') }}
+            Drafted {{ post.created_at|et }}
             {% if post.source_theme %}· {{ post.source_theme }}{% endif %}
             {% if post.revision_of %}· redo{% endif %}
           </p>
 
+          {% if post.error %}
+          <p class="error-box card-error">Last publish attempt didn't go through — fix or retry:
+            {{ post.error }}</p>
+          {% endif %}
+
           <form method="post">
             <label for="caption-{{ post.id }}">Caption</label>
             <textarea id="caption-{{ post.id }}" name="caption" required>{{ post.caption }}</textarea>
+            {% if post.platform == 'instagram' %}
+            <p class="meta ig-fold" data-for="caption-{{ post.id }}">
+              <span class="ig-fold-label">Before “…more”:</span> <span class="ig-fold-text"></span>
+            </p>
+            {% elif post.platform == 'x' %}
+            <p class="meta x-count" data-caption="caption-{{ post.id }}" data-tags="hashtags-{{ post.id }}"></p>
+            {% endif %}
 
             <label for="hashtags-{{ post.id }}">Hashtags</label>
             <textarea id="hashtags-{{ post.id }}" name="hashtags" class="hashtags-box">{{ post.hashtags }}</textarea>
+
+            {% if post.id in card_posts %}
+            <label for="cardtext-{{ post.id }}">Card text (the line on the image)</label>
+            <textarea id="cardtext-{{ post.id }}" name="image_text" class="hashtags-box">{{ post.image_text }}</textarea>
+            {% endif %}
 
             {% include "_photo_pick.html" %}
 
@@ -231,6 +327,43 @@
       var fit = function () { t.style.height = "auto"; t.style.height = (t.scrollHeight + 2) + "px"; };
       t.addEventListener("input", fit);
       fit();
+    });
+
+    // Instagram cuts captions around 125 characters behind "…more" — show
+    // exactly what survives the fold so the hook gets front-loaded
+    document.querySelectorAll(".ig-fold").forEach(function (el) {
+      var box = document.getElementById(el.dataset.for);
+      if (!box) return;
+      var text = el.querySelector(".ig-fold-text");
+      var update = function () {
+        var caption = box.value.replace(/\s+/g, " ").trim();
+        if (caption.length <= 125) {
+          text.textContent = "the whole caption shows ✓";
+          el.classList.remove("clipped");
+        } else {
+          text.textContent = "“" + caption.slice(0, 125).trim() + "…”";
+          el.classList.add("clipped");
+        }
+      };
+      box.addEventListener("input", update);
+      update();
+    });
+
+    // X allows 280 characters — the caption and hashtags post together
+    document.querySelectorAll(".x-count").forEach(function (el) {
+      var caption = document.getElementById(el.dataset.caption);
+      var tags = document.getElementById(el.dataset.tags);
+      if (!caption) return;
+      var update = function () {
+        var total = caption.value.trim().length;
+        var t = tags && tags.value.trim();
+        if (t) total += t.length + 2;
+        el.textContent = total + " of 280 characters (caption + hashtags)";
+        el.classList.toggle("over", total > 280);
+      };
+      caption.addEventListener("input", update);
+      if (tags) tags.addEventListener("input", update);
+      update();
     });
   </script>
 </body>

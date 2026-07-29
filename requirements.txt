@@ -6,3 +6,4 @@ requests
 pillow
 python-dotenv
 gunicorn
+pypdf

@@ -47,6 +47,7 @@
   --linkedin: #0a66c2;
   --ig-gradient: linear-gradient(45deg, #f09433 0%, #dc2743 50%, #bc1888 100%);
   --ig-accent: #cc2366;
+  --x-black: #0f1419;
 }
 
 * { box-sizing: border-box; }
@@ -230,23 +231,6 @@ textarea.hashtags-box { min-height: 0; }
   margin-bottom: 1.25rem;
 }
 
-.status-pill {
-  display: inline-block;
-  font-size: .8125rem;
-  font-weight: 600;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  padding: .35rem .9rem;
-  border-radius: 999px;
-  background: var(--color-blue-soft);
-  color: var(--color-blue-dark);
-  margin-bottom: 1rem;
-}
-
-.status-pill.published { background: #e7f6ec; color: #1e7a46; }
-.status-pill.failed { background: #fdeeee; color: #b3372f; }
-.status-pill.rejected { background: #f1f2f5; color: var(--color-gray); }
-
 .error-box {
   background: #fdeeee;
   border: 1px solid #f3c9c5;
@@ -367,6 +351,7 @@ textarea.hashtags-box { min-height: 0; }
 
 .platform-badge.linkedin { background: var(--linkedin); }
 .platform-badge.instagram { background: var(--ig-gradient); }
+.platform-badge.x { background: var(--x-black); }
 
 .platform-empty { margin-bottom: 2rem; }
 
@@ -407,6 +392,7 @@ textarea.hashtags-box { min-height: 0; }
 
 .option-card.linkedin::before, .archive-card.linkedin::before { background: var(--linkedin); }
 .option-card.instagram::before, .archive-card.instagram::before { background: var(--ig-gradient); }
+.option-card.x::before, .archive-card.x::before { background: var(--x-black); }
 
 /* ---- archive ---- */
 
@@ -486,60 +472,6 @@ textarea.hashtags-box { min-height: 0; }
 
 .upload-intro { flex: 1 1 100%; }
 .upload-intro .meta { margin: 0; }
-
-.photo-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: .7rem;
-  margin-top: 1.1rem;
-}
-
-.photo-tile { position: relative; }
-
-.photo-tile img {
-  width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
-  display: block;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
-}
-
-.photo-tile:has(.photo-badge.used) img { opacity: .45; }
-
-.photo-badge {
-  position: absolute;
-  bottom: 7px;
-  left: 7px;
-  font-size: .6rem;
-  font-weight: 700;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  padding: .12rem .5rem;
-  border-radius: 999px;
-  background: var(--color-blue);
-  color: var(--color-white);
-}
-
-.photo-badge.reserved { background: var(--color-ink-soft); }
-.photo-badge.used { background: var(--color-gray-light); }
-
-.photo-x {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(10, 20, 40, .65);
-  color: var(--color-white);
-  font-size: .72rem;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.photo-x:hover { background: #b3372f; }
 
 .upload-form input[type="file"] {
   font-family: var(--font-sans);
@@ -694,6 +626,94 @@ textarea.hashtags-box { min-height: 0; }
 
 .photo-counts { margin: .9rem 0 0; font-size: .82rem; }
 
+/* ---- data library (articles, links, PDFs) ---- */
+
+.library-sub {
+  font-size: .8125rem;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--color-gray);
+  margin: 1.4rem 0 .6rem;
+}
+
+.setup-cell .library-sub:first-of-type { margin-top: 0; }
+
+.doc-form textarea { min-height: 0; }
+
+.doc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .75rem;
+  margin-top: .7rem;
+}
+
+.doc-row input[type="file"] {
+  font-family: var(--font-sans);
+  font-size: .82rem;
+  color: var(--color-gray);
+  max-width: 220px;
+}
+
+.doc-row input[type="file"]::file-selector-button {
+  font-family: var(--font-sans);
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--color-blue-dark);
+  background: var(--color-blue-soft);
+  border: 1px solid var(--color-blue);
+  border-radius: 999px;
+  padding: .4rem .9rem;
+  margin-right: .6rem;
+  cursor: pointer;
+}
+
+.doc-list { list-style: none; margin: 1rem 0 0; padding: 0; }
+
+.doc-list li {
+  display: flex;
+  align-items: baseline;
+  gap: .6rem;
+  padding: .45rem 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: .88rem;
+}
+
+.doc-list li:last-child { border-bottom: none; }
+
+.doc-kind {
+  flex-shrink: 0;
+  font-size: .62rem;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--color-blue-dark);
+  background: var(--color-blue-soft);
+  border-radius: 999px;
+  padding: .12rem .55rem;
+}
+
+.doc-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.doc-title a { color: var(--color-ink); text-decoration: none; }
+.doc-title a:hover { color: var(--color-blue-dark); text-decoration: underline; }
+
+.doc-meta { color: var(--color-gray-light); font-size: .76rem; white-space: nowrap; }
+
+.custom-doc-pick {
+  margin-top: .7rem;
+  width: 100%;
+  font: inherit;
+  font-size: .92rem;
+  padding: .55rem .7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-white);
+  color: var(--color-ink);
+}
+
 /* ---- generate-all button in the topbar ---- */
 
 .topbar-generate { margin: 0; }
@@ -757,3 +777,150 @@ textarea.hashtags-box { min-height: 0; }
 .photo-pick-thumb:hover { border-color: var(--color-blue); }
 
 .photo-pick-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* ---- system health strip ---- */
+
+.health-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem .6rem;
+  margin-bottom: 1.25rem;
+}
+
+.health-item {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--color-gray);
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: .28rem .85rem;
+}
+
+.health-item.warn {
+  color: #8a5a10;
+  background: #fdf6e7;
+  border-color: #f0dcb0;
+}
+
+.notice-warn {
+  background: #fdf6e7;
+  border-color: #f0dcb0;
+  color: #6d4a10;
+}
+
+/* a publish failure keeps the card in place and shows the error on it */
+.card-error { margin: 0 0 1rem; }
+
+/* ---- Instagram "…more" fold preview ---- */
+
+.ig-fold {
+  margin: .5rem 0 0;
+  font-size: .8rem;
+  color: var(--color-gray-light);
+}
+
+.ig-fold-label {
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  font-size: .68rem;
+}
+
+.ig-fold.clipped .ig-fold-text { color: var(--color-gray); }
+
+.x-count {
+  margin: .5rem 0 0;
+  font-size: .78rem;
+  color: var(--color-gray-light);
+}
+
+.x-count.over { color: #b3372f; font-weight: 600; }
+
+/* ---- generate a post (custom uploads) ---- */
+
+.custom-card { margin-top: 1.5rem; }
+
+.custom-intro { margin-bottom: 1rem; }
+
+.custom-form .custom-text { min-height: 74px; }
+
+.custom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: .9rem;
+}
+
+.custom-row input[type="file"] {
+  font-family: var(--font-sans);
+  font-size: .85rem;
+  color: var(--color-gray);
+  max-width: 260px;
+}
+
+.custom-row input[type="file"]::file-selector-button {
+  font-family: var(--font-sans);
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--color-blue-dark);
+  background: var(--color-blue-soft);
+  border: 1px solid var(--color-blue);
+  border-radius: 999px;
+  padding: .45rem 1rem;
+  margin-right: .7rem;
+  cursor: pointer;
+}
+
+/* ---- archive stats + manual LinkedIn numbers ---- */
+
+.archive-stats {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  margin-bottom: 1rem;
+  background: var(--color-white);
+}
+
+.archive-stats .metric strong { font-size: 1.3rem; }
+
+.best-post { margin: -.25rem 0 1.5rem; font-size: .85rem; }
+
+.metrics-entry { margin-top: .8rem; }
+
+.metrics-entry summary {
+  cursor: pointer;
+  font-size: .8125rem;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--color-blue-dark);
+}
+
+.metrics-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .5rem;
+  margin-top: .75rem;
+}
+
+.metrics-form input[type="number"] {
+  width: 100%;
+  font-family: var(--font-sans);
+  font-size: .9rem;
+  color: var(--color-ink);
+  background: var(--color-off-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: .55rem .75rem;
+}
+
+.metrics-form input[type="number"]:focus {
+  outline: none;
+  border-color: var(--color-blue);
+  background: var(--color-white);
+}
+
+.metrics-form .btn { grid-column: 1 / -1; }
+
+.metrics-entry-hint { margin: .6rem 0 0; font-size: .78rem; }

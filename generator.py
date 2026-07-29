@@ -98,7 +98,52 @@ CATEGORIES = {
         ),
         "web_search": False,
     },
+    # ---- X: one sharp idea, built to be reposted ----
+    "x_take": {
+        "platform": "x",
+        "label": "Sharp Take",
+        "brief": (
+            "a sharp, contrarian-but-true take on leadership or careers — the"
+            " kind of line people quote-post because it says what they've felt"
+            " but never worded. One idea only. Draw on his Triangle of"
+            " Leadership thinking without naming the framework every time."
+        ),
+        "web_search": False,
+    },
+    "x_medspace": {
+        "platform": "x",
+        "label": "Medspace Motivation",
+        "brief": (
+            "an uplifting one-idea post about the progress happening in"
+            " medicine and life sciences — why the work matters, how far"
+            " treatment has come. Big-picture and hopeful; no clinical claims,"
+            " no numbers that would need a citation, nothing that reads as"
+            " medical advice."
+        ),
+        "web_search": False,
+    },
+    "x_motivation": {
+        "platform": "x",
+        "label": "Motivation",
+        "brief": (
+            "a punchy motivational line about discipline, resilience,"
+            " self-belief, or showing up on the hard days — universal, warm,"
+            " and short enough to screenshot."
+        ),
+        "web_search": False,
+    },
 }
+
+# One-off posts written from uploaded source material (the "Generate a post"
+# box). They never occupy a daily slot and are never topped up by the cron.
+CUSTOM_CATEGORIES = {
+    "custom_ig": {"platform": "instagram", "label": "Custom", "web_search": False},
+    "custom_li": {"platform": "linkedin", "label": "Custom", "web_search": False},
+    "custom_x": {"platform": "x", "label": "Custom", "web_search": False},
+}
+
+# Everything that can appear on a post row — for labels and validity checks.
+ALL_CATEGORIES = {**CATEGORIES, **CUSTOM_CATEGORIES}
 
 WHO_HE_IS = """WHO HE IS:
 - Physician and biopharma executive (17+ years in pharma, 20+ in medicine):
@@ -158,6 +203,20 @@ VOICE_INSTAGRAM = """VOICE FOR THIS INSTAGRAM POST:
 HIS SIGNATURE LINES AND IDEAS (draw on these, don't copy them every time):
 {samples}"""
 
+VOICE_X = """VOICE FOR THIS X (TWITTER) POST:
+- One idea, stated hard. The caption is the whole post: keep it UNDER 200
+  characters so it fits X's limit with the hashtags added after it.
+- No threads, no setup, no "here's the thing". Land the line and get out.
+- Exactly 2 short hashtags in the hashtags field.
+- No emoji, or at most one.
+- image_text is still required: a quotable version of the same idea (it
+  becomes the branded quote card that rides with the post).
+- Still him: a doctor and executive who has lived it, never a growth-hack
+  account.
+
+HIS SIGNATURE LINES AND IDEAS (draw on these, don't copy them every time):
+{samples}"""
+
 PROMPT_TEMPLATE = """You are the social media writer for Iroko Lifesciences Advisory, the biopharma
 strategic advisory practice of Dr. Ike Ogbaa, MD. You write his social posts
 in his established voice. This post is for {platform_label}.
@@ -193,10 +252,18 @@ def _humanize(text: str) -> str:
     return re.sub(r",{2,}", ",", text)
 
 
+PLATFORM_PROMPT_LABELS = {"instagram": "Instagram (cross-posted to Facebook)",
+                          "linkedin": "LinkedIn", "x": "X (Twitter)"}
+
+
 def _voice_block(category: str) -> str:
-    if CATEGORIES[category]["platform"] == "instagram":
+    platform = ALL_CATEGORIES[category]["platform"]
+    if platform == "instagram":
         samples = _read_text(config.BOOK_QUOTES_FILE) or "(none on file)"
         return VOICE_INSTAGRAM.format(samples=samples)
+    if platform == "x":
+        samples = _read_text(config.BOOK_QUOTES_FILE) or "(none on file)"
+        return VOICE_X.format(samples=samples)
     samples = "\n\n".join(
         s for s in (_read_text(config.SAMPLE_POSTS_FILE),
                     _read_text(config.BOOK_QUOTES_FILE)) if s
@@ -209,7 +276,8 @@ def _build_prompt(category: str, source_theme: str | None,
                   lessons: list[str] | None = None,
                   top_performers: list[tuple[int, str]] | None = None,
                   photos: list[tuple[int, str]] | None = None,
-                  campaign: str | None = None) -> str:
+                  campaign: str | None = None,
+                  library: list[tuple[str, str]] | None = None) -> str:
     spec = CATEGORIES[category]
     task = f"TASK: Write ONE post. Today's category: {spec['brief']}"
     if campaign and campaign.strip():
@@ -234,6 +302,17 @@ def _build_prompt(category: str, source_theme: str | None,
         )
     else:
         task += "\n\n(No photos available — set \"photo\" to null.)"
+    if library:
+        docs = "\n".join(f"- {title}: {summary}" for title, summary in library
+                         if title and summary)
+        if docs:
+            task += (
+                "\n\nREFERENCE LIBRARY — material Dr. Ike's team has saved"
+                " (articles, features, documents):\n" + docs +
+                "\nOnly draw on one of these if it is genuinely relevant to"
+                " this post's category — mention it naturally, never force it."
+                " Most posts should ignore the library entirely."
+            )
     if source_theme and source_theme.strip():
         task += f"\n\nSpecific direction from Dr. Ike for this post: {source_theme.strip()}"
     if lessons:
@@ -262,7 +341,7 @@ def _build_prompt(category: str, source_theme: str | None,
                 " from all of them — different topic, angle, and opening line:\n" + drafts
             )
     return PROMPT_TEMPLATE.format(
-        platform_label="Instagram" if spec["platform"] == "instagram" else "LinkedIn",
+        platform_label=PLATFORM_PROMPT_LABELS[spec["platform"]],
         who=WHO_HE_IS,
         human_rules=HUMAN_RULES,
         voice=_voice_block(category),
@@ -338,7 +417,8 @@ def generate_post(category: str, source_theme: str | None = None,
                   lessons: list[str] | None = None,
                   top_performers: list[tuple[int, str]] | None = None,
                   photos: list[tuple[int, str]] | None = None,
-                  campaign: str | None = None) -> dict:
+                  campaign: str | None = None,
+                  library: list[tuple[str, str]] | None = None) -> dict:
     """Returns {caption, hashtags, image_text, photo}. Raises RuntimeError on failure.
 
     category: key from CATEGORIES.
@@ -349,12 +429,14 @@ def generate_post(category: str, source_theme: str | None = None,
     photos: [(index, description)] of available library photos; the returned
         "photo" is the chosen index, or None to use the branded quote card.
     campaign: instruction of the active posting focus, if one is running.
+    library: [(title, summary)] of saved reference material, drawn on only
+        when relevant.
     """
     if category not in CATEGORIES:
         raise ValueError(f"unknown category: {category}")
     client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY or None)
     prompt = _build_prompt(category, source_theme, avoid_captions, lessons,
-                           top_performers, photos, campaign)
+                           top_performers, photos, campaign, library)
     use_search = CATEGORIES[category]["web_search"]
     last_err = None
     for attempt in (1, 2):
@@ -364,6 +446,80 @@ def generate_post(category: str, source_theme: str | None = None,
         except (ValueError, json.JSONDecodeError) as e:
             last_err = e
             log.warning("attempt %d: Claude response was not valid JSON: %s", attempt, e)
+    raise RuntimeError(f"Claude did not return valid post JSON after 2 attempts: {last_err}")
+
+
+def generate_custom_post(category: str, source_text: str | None = None,
+                         image_path: str | None = None,
+                         avoid_captions: list[str] | None = None,
+                         lessons: list[str] | None = None,
+                         campaign: str | None = None) -> dict:
+    """One post in Dr. Ike's voice built on uploaded source material — an
+    image, pasted text/link, or both. Used by the "Generate a post" box;
+    returns the same {caption, hashtags, image_text} shape as generate_post.
+    """
+    if category not in CUSTOM_CATEGORIES:
+        raise ValueError(f"unknown custom category: {category}")
+    spec = CUSTOM_CATEGORIES[category]
+
+    task = (
+        "TASK: Dr. Ike's team uploaded source material for a one-off post"
+        f" (the {'attached image' if image_path else 'text below'}"
+        f"{' and the text below' if image_path and source_text else ''})."
+        " Write ONE post in his voice built on that material — announcing it,"
+        " reacting to it, or drawing the lesson from it, whichever fits."
+        " Stay factual to the material; never invent details it doesn't"
+        " contain. If it includes a link, put the link on its own line at the"
+        " end of the caption (for Instagram say 'link in bio' instead)."
+    )
+    if source_text and source_text.strip():
+        task += "\n\nSOURCE MATERIAL FROM DR. IKE'S TEAM:\n" + source_text.strip()
+    if campaign and campaign.strip():
+        task += ("\n\nACTIVE POSTING FOCUS (work it in only where natural):\n"
+                 + campaign.strip())
+    if lessons:
+        rules = "\n".join(f"- {l.strip()}" for l in lessons if l and l.strip())
+        if rules:
+            task += ("\n\nLESSONS FROM DR. IKE'S PAST CORRECTIONS — follow"
+                     " these strictly:\n" + rules)
+    if avoid_captions:
+        drafts = "\n".join(f"- {c[:200]}" for c in avoid_captions if c and c.strip())
+        if drafts:
+            task += ("\n\nOther drafts written from this same material are below."
+                     " Write something clearly different in angle and opening"
+                     " line — same story, different doorway:\n" + drafts)
+    task += "\n\n(Set \"photo\" to null — the uploaded image or the quote card is used.)"
+
+    prompt = PROMPT_TEMPLATE.format(
+        platform_label=PLATFORM_PROMPT_LABELS[spec["platform"]],
+        who=WHO_HE_IS,
+        human_rules=HUMAN_RULES,
+        voice=_voice_block(category),
+        task=task,
+    )
+
+    if image_path:
+        import base64
+        from pathlib import Path
+        image_data = base64.standard_b64encode(Path(image_path).read_bytes()).decode()
+        content = [
+            {"type": "image",
+             "source": {"type": "base64", "media_type": "image/jpeg",
+                        "data": image_data}},
+            {"type": "text", "text": prompt},
+        ]
+    else:
+        content = prompt
+
+    client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY or None)
+    last_err = None
+    for attempt in (1, 2):
+        text = _call_claude(client, content, use_search=False)
+        try:
+            return _extract_json(text)
+        except (ValueError, json.JSONDecodeError) as e:
+            last_err = e
+            log.warning("custom attempt %d: response was not valid JSON: %s", attempt, e)
     raise RuntimeError(f"Claude did not return valid post JSON after 2 attempts: {last_err}")
 
 
@@ -392,6 +548,38 @@ def pick_photo(caption: str, photos: list[tuple[int, str]]) -> int | None:
         return None
     choice = json.loads(text[start:end + 1]).get("photo")
     return choice if isinstance(choice, int) and not isinstance(choice, bool) else None
+
+
+def summarize_document(text: str, source_hint: str = "") -> dict:
+    """One call at upload time: title + short summary for a library document.
+    The summary is what generation prompts see, so it carries the key facts."""
+    client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY or None)
+    response = client.messages.create(
+        model=config.ANTHROPIC_MODEL,
+        max_tokens=300,
+        messages=[{
+            "role": "user",
+            "content": (
+                "A document was saved to Dr. Ike Ogbaa's content library"
+                + (f" (source: {source_hint})" if source_hint else "") +
+                ". Title it and summarize it for future social-post writing:"
+                " the summary must carry the key facts, names, and anything"
+                " quotable, in 2-3 sentences.\n\nDOCUMENT:\n" + text[:12000] +
+                '\n\nReply with ONLY this JSON:'
+                ' {"title": "short title, max 12 words", "summary": "2-3 sentences"}'
+            ),
+        }],
+    )
+    raw = "".join(b.text for b in response.content if b.type == "text")
+    start, end = raw.find("{"), raw.rfind("}")
+    if start == -1 or end <= start:
+        raise ValueError("no JSON in summary response")
+    data = json.loads(raw[start:end + 1])
+    title = str(data.get("title", "")).strip() or "Untitled document"
+    summary = str(data.get("summary", "")).strip()
+    if not summary:
+        raise ValueError("empty document summary")
+    return {"title": title[:200], "summary": summary[:600]}
 
 
 def describe_photo(image_path: str) -> str:

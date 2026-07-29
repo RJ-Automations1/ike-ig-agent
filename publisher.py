@@ -14,8 +14,11 @@ from models import IgCredentials
 
 log = logging.getLogger(__name__)
 
-PLATFORMS = ("instagram", "linkedin")
-PLATFORM_LABELS = {"instagram": "Instagram", "linkedin": "LinkedIn"}
+# "instagram" covers Instagram & Facebook (Meta crossposting shares the post
+# to the connected Facebook Page once the Page credentials are wired).
+PLATFORMS = ("instagram", "linkedin", "x")
+PLATFORM_LABELS = {"instagram": "Instagram & Facebook", "linkedin": "LinkedIn",
+                   "x": "X"}
 
 
 def full_caption(post) -> str:
@@ -105,7 +108,8 @@ class LinkedInPublisher(Publisher):
 
     def _image_bytes(self, post) -> bytes:
         # the rendered card lives on this server's disk — prefer the local file
-        filename = post.image_url.rsplit("/", 1)[-1]
+        # (image_url may carry a ?v= cache-buster; strip it before the path lookup)
+        filename = post.image_url.split("?")[0].rsplit("/", 1)[-1]
         path = config.MEDIA_DIR / filename
         if path.exists():
             return path.read_bytes()
@@ -166,9 +170,23 @@ class LinkedInPublisher(Publisher):
         return resp.headers.get("x-restli-id", "")
 
 
+class XPublisher(Publisher):
+    """X's API isn't wired yet (needs a paid API tier + OAuth keys). Until
+    then X posts stay manual: copy the caption, post it with the image."""
+
+    platform = "x"
+
+    def publish(self, post) -> str:
+        raise RuntimeError(
+            "X publishing isn't connected yet — copy the caption and post it "
+            "on X by hand, or keep this option in test mode."
+        )
+
+
 _REAL_PUBLISHERS = {
     "instagram": InstagramPublisher,
     "linkedin": LinkedInPublisher,
+    "x": XPublisher,
 }
 
 

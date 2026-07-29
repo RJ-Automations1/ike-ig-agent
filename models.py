@@ -26,7 +26,8 @@ class Post(Base):
     post_group_id = Column(String(36), nullable=False)
     # instagram | linkedin — the one platform this post was written for
     platform = Column(String(32), nullable=False, default="instagram")
-    # pending | approved | publishing | published | failed | rejected
+    # pending | saved | publishing | published | rejected — a failed publish
+    # returns the post to pending/saved with .error set (no "failed" limbo)
     status = Column(String(20), nullable=False, default="pending", index=True)
     # key from generator.CATEGORIES; null/legacy keys on old rows
     category = Column(String(32), nullable=True)
@@ -35,6 +36,9 @@ class Post(Base):
     image_url = Column(Text, nullable=False)   # public HTTPS URL to the rendered JPEG
     image_text = Column(Text, nullable=False)  # the line rendered on the card
     source_theme = Column(Text, nullable=True)
+    # legacy (an abandoned per-post review-link design) — unused, but the DB
+    # column is NOT NULL so the model keeps filling it; dropping it needs a
+    # migration against the prod Postgres
     review_token = Column(
         String(64), unique=True, nullable=False,
         default=lambda: secrets.token_urlsafe(32),
@@ -105,6 +109,25 @@ class Photo(Base):
     post_id = Column(String(36), nullable=True)      # draft/post currently holding it
     created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
     used_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class Document(Base):
+    """Reference material in the data library: pasted articles, links, and
+    PDFs. Daily generation sees the summaries and draws on whatever is
+    genuinely relevant; the Generate-a-post box can build directly on the
+    full text."""
+
+    __tablename__ = "documents"
+
+    id = Column(String(36), primary_key=True, default=new_uuid)
+    kind = Column(String(10), nullable=False)   # pdf | link | text
+    title = Column(String(200), nullable=False)
+    url = Column(Text, nullable=True)           # for links
+    filename = Column(Text, nullable=True)      # for uploaded PDFs (in static/media)
+    content = Column(Text, nullable=False)      # extracted text (truncated)
+    summary = Column(Text, nullable=False)      # short summary shown to prompts
+    used_count = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
 
 
 class Campaign(Base):

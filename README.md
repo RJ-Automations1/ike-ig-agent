@@ -15,11 +15,24 @@ The flow:
    overlap. Categories are defined in `generator.CATEGORIES` — edit the briefs
    there to steer the content mix.
 2. Dr. Ike **logs in to the live dashboard** (password-protected) and reviews the options.
-3. For each option he can **Publish**, **Save changes** (edit caption/hashtags),
-   or **Redo** (discard and regenerate, optionally with a steering note).
+   Posts lead with real photos from an upload-once **data library** when one fits
+   (used photos return to the pool after `PHOTO_REUSE_DAYS`); the branded quote card
+   is the fallback. The library also holds **articles, links, and PDFs** — each is
+   summarized at upload, daily generation draws on whatever is relevant, and the
+   **Generate a post** box can build directly on any saved item (or on a one-off
+   upload) to produce one post per platform. A time-boxed **posting focus** (book
+   push, speaking push, or custom) can steer every generated post for a set stretch.
+3. For each option he can **Publish**, **Save changes** (edit caption, hashtags, or
+   the card's quote line — the card re-renders), **Save for later** (parks the draft
+   on the Archive tab and frees the slot), or **Redo** (discard and regenerate,
+   optionally with a steering note). Edits and redo notes are distilled into durable
+   **lessons** that steer future generation; rules can also be added by hand.
 4. Each post publishes to the one platform it was written for, with the result
-   recorded in the `publications` table. An **Archive** tab lists everything
-   published, color-coded by platform, with per-post Instagram analytics.
+   recorded in the `publications` table. A failed publish keeps the post exactly
+   where it was with the error shown on the card — nothing ever disappears. An
+   **Archive** tab lists everything published, color-coded by platform, with
+   per-post Instagram analytics (LinkedIn and X numbers can be entered by hand —
+   those APIs expose none).
 
 ## Project layout
 
@@ -54,7 +67,7 @@ Open `http://localhost:5000/`, sign in with `DASHBOARD_PASSWORD`, and click
 media id per platform instead of hitting the real APIs.
 
 The cron endpoint still exists for scheduled generation (tops the dashboard up to
-`DAILY_POST_COUNT` pending options):
+one pending option per category):
 
 ```bash
 curl -s -X POST http://localhost:5000/generate -H "X-Generate-Secret: <secret>"
@@ -82,6 +95,8 @@ See `.env.example`. Notes:
 | `USE_MOCK_PUBLISHER` | `true` in dev; `false` to publish for real (all platforms) |
 | `IG_USER_ID` / `IG_ACCESS_TOKEN` | seed the `ig_credentials` table on first startup |
 | `LINKEDIN_ACCESS_TOKEN` / `LINKEDIN_AUTHOR_URN` | LinkedIn publishing (see below) |
+| `LINKEDIN_TOKEN_EXPIRES` | `YYYY-MM-DD` the LinkedIn token lapses — the dashboard warns 14 days out |
+| `PHOTO_REUSE_DAYS` | library photos return to the pool this many days after publishing (default 60) |
 | `FB_APP_ID` / `FB_APP_SECRET` | used only by `refresh_token.py` (fb_exchange_token grant — the IG Graph API runs on a Meta app) |
 
 ## Deploy to Render
@@ -112,8 +127,9 @@ token before it expires (~60 days).
 - The image URL must be publicly reachable over **HTTPS**, a **JPEG**, aspect ratio
   4:5–1.91:1 (cards are 1:1, which is inside the range). Rendered cards are served from
   `{APP_BASE_URL}/static/media/<uuid>.jpg`.
-- Publishing uses `graph.facebook.com/v21.0`: `POST /{ig_user_id}/media` (container) then
-  `POST /{ig_user_id}/media_publish`.
+- Publishing uses `graph.facebook.com/v23.0`: `POST /{ig_user_id}/media` (container) then
+  `POST /{ig_user_id}/media_publish`. Meta retires Graph versions after ~2 years —
+  bump `GRAPH_API_BASE` when it ages out.
 
 ### LinkedIn
 - Three-step publish: `POST /rest/images?action=initializeUpload` → `PUT` the image
@@ -130,13 +146,14 @@ fine for pending drafts published quickly, but a disk is safer.
 
 ## Post lifecycle
 
-`pending` → (approve) → `publishing` → `published` | `failed`
+`pending` → (approve) → `publishing` → `published`, or back to `pending`/`saved`
+with `posts.error` set if the platform call failed (the card stays put).
+`pending` → (save for later) → `saved` → publish or discard from the Archive tab
 `pending` → (redo) → `rejected`, and a new `pending` row is created with `revision_of`
 pointing at the old draft and the same `post_group_id`.
 
 Each publish attempt writes a row in `publications` (`post_id`, `platform`, `status`,
-`external_id`, `error`). Every post targets exactly one platform (`posts.platform`);
-publish failures are reported in the dashboard's flash banner.
+`external_id`, `error`). Every post targets exactly one platform (`posts.platform`).
 
 Approval is idempotent: the pending → publishing transition is an atomic claim, so a
 double-click can never publish twice.

@@ -24,6 +24,22 @@
       <span class="meta archive-count">{{ posts|length }} published post{{ 's' if posts|length != 1 }}</span>
     </div>
 
+    {% if stats.total %}
+    <div class="metrics archive-stats">
+      <div class="metric"><strong>{{ stats.total }}</strong><span>Published</span></div>
+      <div class="metric"><strong>{{ stats.instagram }}</strong><span>Instagram &amp; FB</span></div>
+      <div class="metric"><strong>{{ stats.linkedin }}</strong><span>LinkedIn</span></div>
+      <div class="metric"><strong>{{ stats.x }}</strong><span>X</span></div>
+      {% if stats.avg_score %}
+      <div class="metric"><strong>{{ '{:,}'.format(stats.avg_score) }}</strong><span>Avg. engagement</span></div>
+      {% endif %}
+    </div>
+    {% if stats.best_caption %}
+    <p class="meta best-post">Best of the last 30 days: “{{ stats.best_caption }}”
+      (score {{ '{:,}'.format(stats.best_score) }}){% if stats.sample %} · sample numbers until real publishing starts{% endif %}</p>
+    {% endif %}
+    {% endif %}
+
     {% if saved_posts %}
     <h2 class="history-head">Saved for <span class="accent">later</span></h2>
     <p class="meta saved-hint">Drafts you set aside from the dashboard — edit and publish
@@ -37,7 +53,12 @@
             {% if post.category in categories %}{{ categories[post.category].label }}{% else %}Saved post{% endif %}
             · {{ platform_labels[post.platform] }}
           </div>
-          <p class="meta">Drafted {{ post.created_at.strftime('%b %-d, %H:%M UTC') }}</p>
+          <p class="meta">Drafted {{ post.created_at|et }}</p>
+
+          {% if post.error %}
+          <p class="error-box card-error">Last publish attempt didn't go through — fix or retry:
+            {{ post.error }}</p>
+          {% endif %}
 
           <form method="post">
             <input type="hidden" name="return_to" value="archive">
@@ -46,6 +67,11 @@
 
             <label for="hashtags-{{ post.id }}">Hashtags</label>
             <textarea id="hashtags-{{ post.id }}" name="hashtags" class="hashtags-box">{{ post.hashtags }}</textarea>
+
+            {% if post.id in card_posts %}
+            <label for="cardtext-{{ post.id }}">Card text (the line on the image)</label>
+            <textarea id="cardtext-{{ post.id }}" name="image_text" class="hashtags-box">{{ post.image_text }}</textarea>
+            {% endif %}
 
             {% include "_photo_pick.html" %}
 
@@ -83,7 +109,7 @@
           <div class="archive-top">
             <span class="platform-badge {{ post.platform }}">{{ platform_labels.get(post.platform, post.platform|capitalize) }}</span>
             {% if post.published_at %}
-            <span class="archive-date">{{ post.published_at.strftime('%b %-d, %Y') }}</span>
+            <span class="archive-date">{{ post.published_at|et('%b %-d, %Y') }}</span>
             {% endif %}
           </div>
           <div class="eyebrow">
@@ -92,25 +118,41 @@
           <p class="archive-caption">{{ post.caption }}</p>
           {% if post.hashtags %}<p class="archive-hashtags">{{ post.hashtags }}</p>{% endif %}
 
-          {% if post.platform == 'instagram' %}
-            {% set pubs = post.publications | selectattr('platform', 'equalto', 'instagram')
-                          | selectattr('status', 'equalto', 'published') | list %}
-            {% set pub = pubs | last if pubs else none %}
-            {% if pub and pub.has_metrics %}
-            <div class="metrics">
-              <div class="metric"><strong>{{ '{:,}'.format(pub.likes or 0) }}</strong><span>Likes</span></div>
-              <div class="metric"><strong>{{ '{:,}'.format(pub.comments or 0) }}</strong><span>Comments</span></div>
-              <div class="metric"><strong>{{ '{:,}'.format(pub.shares or 0) }}</strong><span>Shares</span></div>
-              <div class="metric"><strong>{{ '{:,}'.format(pub.impressions or 0) }}</strong><span>Reach</span></div>
-            </div>
-            {% if pub.metrics_source == 'mock' %}
-            <p class="metrics-note">Sample numbers — real Instagram analytics start once publishing goes live.</p>
-            {% endif %}
-            {% else %}
-            <p class="metrics-note">Instagram analytics will appear here shortly after publishing.</p>
-            {% endif %}
-          {% else %}
-            <p class="metrics-note">LinkedIn doesn't share analytics for personal profiles — check the post on LinkedIn.</p>
+          {% set pubs = post.publications | selectattr('status', 'equalto', 'published') | list %}
+          {% set pub = pubs | last if pubs else none %}
+          {% if pub and pub.has_metrics %}
+          <div class="metrics">
+            <div class="metric"><strong>{{ '{:,}'.format(pub.likes or 0) }}</strong><span>Likes</span></div>
+            <div class="metric"><strong>{{ '{:,}'.format(pub.comments or 0) }}</strong><span>Comments</span></div>
+            <div class="metric"><strong>{{ '{:,}'.format(pub.shares or 0) }}</strong><span>Shares</span></div>
+            <div class="metric"><strong>{{ '{:,}'.format(pub.impressions or 0) }}</strong><span>Reach</span></div>
+          </div>
+          {% if pub.metrics_source == 'mock' %}
+          <p class="metrics-note">Sample numbers — real analytics start once publishing goes live.</p>
+          {% elif pub.metrics_source == 'manual' %}
+          <p class="metrics-note">Entered by hand · updated {{ pub.metrics_updated_at|et('%b %-d') }}.</p>
+          {% endif %}
+          {% elif post.platform == 'instagram' %}
+          <p class="metrics-note">Instagram analytics will appear here shortly after publishing.</p>
+          {% endif %}
+
+          {% if pub and post.platform in ('linkedin', 'x') %}
+          <details class="metrics-entry">
+            <summary>{{ 'Update' if pub.has_metrics else 'Add' }} {{ platform_labels[post.platform] }} numbers</summary>
+            <form method="post" action="{{ url_for('set_metrics', pub_id=pub.id) }}" class="metrics-form">
+              <input type="number" min="0" name="impressions" placeholder="Impressions"
+                     value="{{ pub.impressions if pub.impressions is not none }}">
+              <input type="number" min="0" name="likes" placeholder="Likes"
+                     value="{{ pub.likes if pub.likes is not none }}">
+              <input type="number" min="0" name="comments" placeholder="Comments"
+                     value="{{ pub.comments if pub.comments is not none }}">
+              <input type="number" min="0" name="shares" placeholder="Reposts"
+                     value="{{ pub.shares if pub.shares is not none }}">
+              <button class="btn btn-secondary">Save numbers</button>
+            </form>
+            <p class="meta metrics-entry-hint">Copy them from the post's analytics on
+              {{ platform_labels[post.platform] }} — the agent favors whatever performs best.</p>
+          </details>
           {% endif %}
         </div>
       </div>
