@@ -25,7 +25,8 @@ import config
 from db import SessionLocal, init_db
 from generator import (
     ALL_CATEGORIES, CATEGORIES, CUSTOM_CATEGORIES, describe_photo,
-    generate_custom_post, generate_post, pick_photo, summarize_document,
+    fetch_url_via_claude, generate_custom_post, generate_post, pick_photo,
+    summarize_document,
 )
 from imagegen import prepare_photo, render_card
 from learning import distill_lesson
@@ -548,6 +549,9 @@ def _fetch_link_text(url: str) -> str:
         "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                        "AppleWebKit/537.36 (KHTML, like Gecko) "
                        "Chrome/126.0.0.0 Safari/537.36"),
+        "Accept": ("text/html,application/xhtml+xml,application/xml;q=0.9,"
+                   "image/avif,image/webp,*/*;q=0.8"),
+        "Accept-Language": "en-US,en;q=0.9",
     })
     resp.raise_for_status()
     html = resp.text
@@ -583,6 +587,7 @@ def add_document():
     pasted = (request.form.get("doc_text") or "").strip()
 
     try:
+        meta = None
         if file and file.filename:
             data = file.read()
             if not (file.filename.lower().endswith(".pdf") or data[:5] == b"%PDF-"):
@@ -593,8 +598,16 @@ def add_document():
             (config.MEDIA_DIR / filename).write_bytes(data)
             kind, url, hint = "pdf", None, file.filename
         elif pasted and re.fullmatch(r"https?://\S+", pasted):
-            content = _fetch_link_text(pasted)
             kind, url, filename, hint = "link", pasted, None, pasted
+            try:
+                content = _fetch_link_text(pasted)
+            except Exception:
+                # many sites block requests from cloud-server IPs — have
+                # Claude fetch the page from its side instead
+                app.logger.info("Direct fetch blocked for %s — using web_fetch fallback", pasted)
+                fetched = fetch_url_via_claude(pasted)
+                content = fetched["content"]
+                meta = {"title": fetched["title"], "summary": fetched["summary"]}
         elif pasted:
             content = pasted[:DOC_TEXT_LIMIT]
             kind, url, filename, hint = "text", None, None, "pasted text"
@@ -602,10 +615,12 @@ def add_document():
             flash("Paste an article, a link, or choose a PDF first.", "error")
             return redirect(url_for("dashboard"))
 
-        meta = summarize_document(content, source_hint=hint)
+        if meta is None:
+            meta = summarize_document(content, source_hint=hint)
     except Exception as e:
         app.logger.exception("Library add failed")
-        flash(f"Couldn't read that material: {e}", "error")
+        flash("Couldn't read that link or material — the site may be blocking "
+              f"automated readers. Try pasting the article text instead. ({e})", "error")
         return redirect(url_for("dashboard"))
 
     session = SessionLocal()

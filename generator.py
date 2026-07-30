@@ -550,6 +550,54 @@ def pick_photo(caption: str, photos: list[tuple[int, str]]) -> int | None:
     return choice if isinstance(choice, int) and not isinstance(choice, bool) else None
 
 
+WEB_FETCH_TOOL = {"type": "web_fetch_20260209", "name": "web_fetch", "max_uses": 3}
+
+
+def fetch_url_via_claude(url: str) -> dict:
+    """Fallback when the server can't fetch a URL directly (many sites 403
+    requests from cloud-server IPs): Claude's server-side web_fetch tool
+    retrieves the page from Anthropic's side and returns the library fields
+    in one call. Returns {title, summary, content}."""
+    client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY or None)
+    prompt = (
+        "Fetch this page and archive it for Dr. Ike Ogbaa's content library: "
+        + url +
+        "\n\nYour FINAL message must be ONLY valid JSON, no preamble, no"
+        ' fences:\n{"title": "short title, max 12 words",'
+        ' "summary": "2-3 sentences carrying the key facts, names, and anything quotable",'
+        ' "content": "the page\'s main text, faithfully extracted, up to 2000 words"}'
+    )
+    kwargs = {
+        "model": config.ANTHROPIC_MODEL,
+        "max_tokens": 6000,
+        "tools": [WEB_FETCH_TOOL],
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    response = client.messages.create(**kwargs)
+    for _ in range(3):  # server-side fetch can pause a long turn; resume it
+        if response.stop_reason != "pause_turn":
+            break
+        kwargs["messages"] = [
+            {"role": "user", "content": prompt},
+            {"role": "assistant", "content": response.content},
+        ]
+        response = client.messages.create(**kwargs)
+
+    text_blocks = [b.text for b in response.content if b.type == "text"]
+    raw = text_blocks[-1] if text_blocks else ""
+    start, end = raw.find("{"), raw.rfind("}")
+    if start == -1 or end <= start:
+        raise ValueError("the page couldn't be fetched or read")
+    # strict=False tolerates literal newlines inside the extracted text
+    data = json.loads(raw[start:end + 1], strict=False)
+    title = str(data.get("title", "")).strip()
+    summary = str(data.get("summary", "")).strip()
+    content = str(data.get("content", "")).strip()
+    if not (title and summary and content):
+        raise ValueError("the page couldn't be fetched or read")
+    return {"title": title[:200], "summary": summary[:600], "content": content}
+
+
 def summarize_document(text: str, source_hint: str = "") -> dict:
     """One call at upload time: title + short summary for a library document.
     The summary is what generation prompts see, so it carries the key facts."""
